@@ -22,9 +22,7 @@ const ShadeCard: React.FC<ShadeCardProps> = ({ shade, isPrimary = false }) => {
       )}
 
       <div
-        className={`relative ${
-          isPrimary ? 'w-48 h-72' : 'w-32 h-48'
-        } mb-6 transition-all duration-700`}
+        className={`relative ${isPrimary ? 'w-48 h-72' : 'w-32 h-48'} mb-6 transition-all duration-700`}
       >
         <img
           src={shade.imageUrl}
@@ -35,9 +33,7 @@ const ShadeCard: React.FC<ShadeCardProps> = ({ shade, isPrimary = false }) => {
 
       <div className="text-center w-full">
         <h3
-          className={`${
-            isPrimary ? 'text-5xl' : 'text-2xl'
-          } font-black text-black mb-2 tracking-tighter`}
+          className={`${isPrimary ? 'text-5xl' : 'text-2xl'} font-black text-black mb-2 tracking-tighter`}
         >
           {shade.code}
         </h3>
