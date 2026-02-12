@@ -110,7 +110,7 @@ const App: React.FC = () => {
             <div className="absolute inset-0 z-0">
               <img 
                 src="https://images.unsplash.com/photo-1596704017254-9b121068fb31?q=80&w=2000&auto=format&fit=crop" 
-                alt="Altov Beauty Brand Model" 
+                alt="AltoV Beauty Brand Model" 
                 className="w-full h-full object-cover opacity-40"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#FFF9F5] via-transparent to-transparent"></div>
@@ -204,7 +204,7 @@ const App: React.FC = () => {
             </div>
             <h2 className="text-4xl mb-4 italic text-[#8B5E3C] font-light">Analyzing Skin Chemistry...</h2>
             <p className="text-gray-400 max-w-xs mx-auto font-medium tracking-wide">
-              Calculating your position on the Altov HF scale.
+              Calculating your position on the AltoV HF scale.
             </p>
           </section>
         )}
@@ -251,7 +251,7 @@ const App: React.FC = () => {
 
       <footer className="py-8 px-6 flex flex-col items-center">
         <p className="text-[9px] text-gray-400 font-medium tracking-[0.2em] uppercase">
-          &copy; {currentYear} Altov Beauty. All rights reserved.
+          &copy; {currentYear} AltoV Beauty. All rights reserved.
         </p>
       </footer>
     </div>
