@@ -118,7 +118,7 @@ const App: React.FC = () => {
             
             <div className="relative z-10 text-center px-6 max-w-2xl mx-auto">
               <span className="text-[#8B5E3C] font-black tracking-[0.5em] text-[10px] uppercase mb-8 block">Precision AI Shade Match</span>
-              <h1 className="text-5xl md:text-7xl mb-8 leading-tight font-black tracking-tight text-black">Your Altov <br/><span className="italic font-light">HF Selection</span></h1>
+              <h1 className="text-5xl md:text-7xl mb-8 leading-tight font-black tracking-tight text-black">Your AltoV <br/><span className="italic font-light">HF Selection</span></h1>
               <p className="text-gray-600 text-lg mb-12 leading-relaxed max-w-lg mx-auto font-medium">
                 Find your perfect Hydrating Foundation shade range instantly. 
               </p>
