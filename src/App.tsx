@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { analyzeSkinTone } from "./services/geminiService";
 
 type GeminiResult = {
@@ -6,15 +6,23 @@ type GeminiResult = {
   reason: string;
 };
 
-const fileToBase64 = (file: File): Promise<string> => {
+const fileToBase64 = (
+  file: File
+): Promise<{ base64: string; mimeType: string }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
 
     reader.onload = () => {
       const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      resolve(base64);
+      const [header, data] = result.split(",");
+      const mimeMatch = header.match(/data:(.*?);base64/);
+      const mimeType = mimeMatch?.[1] || file.type || "image/jpeg";
+
+      resolve({
+        base64: data,
+        mimeType,
+      });
     };
 
     reader.onerror = (error) => reject(error);
@@ -27,6 +35,9 @@ const getShadeNumber = (shade: string): number | null => {
 };
 
 export default function App() {
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [bestMatch, setBestMatch] = useState<string>("");
   const [leftShade, setLeftShade] = useState<string>("");
@@ -35,12 +46,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleImageUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const handleFile = async (file: File) => {
     setLoading(true);
     setErrorMsg("");
     setBestMatch("");
@@ -52,8 +58,11 @@ export default function App() {
       const localPreview = URL.createObjectURL(file);
       setPreviewUrl(localPreview);
 
-      const base64 = await fileToBase64(file);
-      const result = (await analyzeSkinTone(base64)) as GeminiResult | null;
+      const { base64, mimeType } = await fileToBase64(file);
+      const result = (await analyzeSkinTone(
+        base64,
+        mimeType
+      )) as GeminiResult | null;
 
       if (!result || !result.bestMatch) {
         setErrorMsg("Could not analyze image.");
@@ -77,6 +86,14 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUploadChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await handleFile(file);
   };
 
   return (
@@ -107,7 +124,51 @@ export default function App() {
       </div>
 
       <div style={{ textAlign: "center", marginBottom: "24px" }}>
-        <input type="file" accept="image/*" onChange={handleImageUpload} />
+        <button
+          onClick={() => cameraInputRef.current?.click()}
+          style={{
+            background: "#000",
+            color: "#fff",
+            border: "none",
+            borderRadius: "999px",
+            padding: "10px 18px",
+            marginRight: "10px",
+            cursor: "pointer",
+          }}
+        >
+          Take Photo
+        </button>
+
+        <button
+          onClick={() => uploadInputRef.current?.click()}
+          style={{
+            background: "#fff",
+            color: "#3d2a1f",
+            border: "1px solid #d8c8bc",
+            borderRadius: "999px",
+            padding: "10px 18px",
+            cursor: "pointer",
+          }}
+        >
+          Upload Photo
+        </button>
+
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          onChange={handleUploadChange}
+          style={{ display: "none" }}
+        />
+
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          capture="user"
+          onChange={handleUploadChange}
+          style={{ display: "none" }}
+        />
       </div>
 
       {loading && (
