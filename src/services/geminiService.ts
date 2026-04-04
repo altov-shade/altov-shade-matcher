@@ -12,10 +12,47 @@ const ALLOWED_SHADES = [
   "HF15",
 ];
 
+type GeminiShadeResult = {
+  bestMatch: string;
+  reason: string;
+};
+
+const extractShadeFromText = (text: string): GeminiShadeResult | null => {
+  const cleaned = text
+    .replace(/^```json/i, "")
+    .replace(/^```/, "")
+    .replace(/```$/, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+
+    if (parsed?.bestMatch && ALLOWED_SHADES.includes(parsed.bestMatch)) {
+      return {
+        bestMatch: parsed.bestMatch,
+        reason: parsed.reason || "",
+      };
+    }
+  } catch {
+    // fall through to regex parsing
+  }
+
+  const shadeMatch = cleaned.match(/\bHF(?:5|6|7|8|9|10|11|12|13|14|15)\b/i);
+
+  if (shadeMatch) {
+    return {
+      bestMatch: shadeMatch[0].toUpperCase(),
+      reason: "",
+    };
+  }
+
+  return null;
+};
+
 export const analyzeSkinTone = async (
   base64Image: string,
   mimeType: string
-) => {
+): Promise<GeminiShadeResult | null> => {
   try {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -54,11 +91,13 @@ Rules:
 - Do not go too light because of brightness
 - If unsure, go slightly deeper instead of lighter
 
-Return ONLY valid JSON:
+Return JSON in this format:
 {
   "bestMatch": "HF12",
   "reason": "short explanation"
 }
+
+If you cannot provide JSON, return only the shade code like HF12.
                   `.trim(),
                 },
                 {
@@ -88,23 +127,19 @@ Return ONLY valid JSON:
     const rawText =
       data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
 
-    const cleaned = rawText
-      .replace(/^```json/i, "")
-      .replace(/^```/, "")
-      .replace(/```$/, "")
-      .trim();
-
-    const parsed = JSON.parse(cleaned);
-
-    if (!ALLOWED_SHADES.includes(parsed.bestMatch)) {
-      console.warn("Invalid shade returned:", parsed.bestMatch);
+    if (!rawText) {
+      console.error("Gemini returned no text:", data);
       return null;
     }
 
-    return {
-      bestMatch: parsed.bestMatch,
-      reason: parsed.reason || "",
-    };
+    const result = extractShadeFromText(rawText);
+
+    if (!result) {
+      console.error("Could not parse Gemini response:", rawText);
+      return null;
+    }
+
+    return result;
   } catch (error) {
     console.error("Shade analysis failed:", error);
     return null;
