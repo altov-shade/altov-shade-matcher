@@ -34,7 +34,7 @@ const extractShadeFromText = (text: string): GeminiShadeResult | null => {
       };
     }
   } catch {
-    // fall through to regex parsing
+    // fall through
   }
 
   const shadeMatch = cleaned.match(/\bHF(?:5|6|7|8|9|10|11|12|13|14|15)\b/i);
@@ -62,7 +62,7 @@ export const analyzeSkinTone = async (
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
