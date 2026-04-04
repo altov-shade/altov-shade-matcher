@@ -12,7 +12,10 @@ const ALLOWED_SHADES = [
   "HF15",
 ];
 
-export const analyzeSkinTone = async (base64Image: string) => {
+export const analyzeSkinTone = async (
+  base64Image: string,
+  mimeType: string
+) => {
   try {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -60,7 +63,7 @@ Return ONLY valid JSON:
                 },
                 {
                   inlineData: {
-                    mimeType: "image/jpeg",
+                    mimeType: mimeType || "image/jpeg",
                     data: base64Image,
                   },
                 },
