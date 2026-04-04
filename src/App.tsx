@@ -6,6 +6,15 @@ type GeminiResult = {
   reason: string;
 };
 
+type ShadeCard = {
+  shade: string;
+  image: string;
+  isBestMatch: boolean;
+};
+
+const MIN_SHADE = 5;
+const MAX_SHADE = 15;
+
 const fileToBase64 = (
   file: File
 ): Promise<{ base64: string; mimeType: string }> => {
@@ -34,15 +43,133 @@ const getShadeNumber = (shade: string): number | null => {
   return match ? parseInt(match[1], 10) : null;
 };
 
+const buildShadeCards = (bestShade: string): ShadeCard[] => {
+  const shadeNumber = getShadeNumber(bestShade);
+  if (!shadeNumber) return [];
+
+  const range = [shadeNumber - 1, shadeNumber, shadeNumber + 1].filter(
+    (num) => num >= MIN_SHADE && num <= MAX_SHADE
+  );
+
+  return range.map((num) => {
+    const shade = `HF${num}`;
+    return {
+      shade,
+      image: `/images/${shade}.png`,
+      isBestMatch: num === shadeNumber,
+    };
+  });
+};
+
+function ShadePanel({
+  card,
+  reason,
+  small = false,
+}: {
+  card: ShadeCard;
+  reason?: string;
+  small?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        width: small ? 260 : 370,
+        minHeight: small ? 430 : 620,
+        background: "#f9f9f9",
+        borderRadius: 36,
+        padding: "26px 24px 30px",
+        textAlign: "center",
+        boxShadow: "0 10px 24px rgba(0,0,0,0.06)",
+        border: card.isBestMatch ? "2px solid #b07a3f" : "none",
+        opacity: small ? 0.82 : 1,
+        position: "relative",
+      }}
+    >
+      {card.isBestMatch && (
+        <div
+          style={{
+            display: "inline-block",
+            background: "#b07a3f",
+            color: "#fff",
+            padding: "12px 24px",
+            borderRadius: 999,
+            fontWeight: 700,
+            letterSpacing: "2px",
+            fontSize: 16,
+            marginBottom: 18,
+          }}
+        >
+          BEST MATCH
+        </div>
+      )}
+
+      <div
+        style={{
+          minHeight: 230,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <img
+          src={card.image}
+          alt={card.shade}
+          style={{
+            maxWidth: small ? 120 : 180,
+            maxHeight: small ? 180 : 260,
+            objectFit: "contain",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          fontSize: small ? 26 : 60,
+          fontWeight: 800,
+          color: "#4b3327",
+          marginTop: 8,
+        }}
+      >
+        {card.shade}
+      </div>
+
+      <div
+        style={{
+          color: "#b07a3f",
+          fontWeight: 700,
+          letterSpacing: "3px",
+          fontSize: small ? 16 : 18,
+          marginTop: 12,
+          marginBottom: card.isBestMatch ? 22 : 0,
+        }}
+      >
+        {card.isBestMatch ? "PRECISION IDENTIFIED" : "NEAR MATCH"}
+      </div>
+
+      {card.isBestMatch && reason && (
+        <p
+          style={{
+            fontSize: 15,
+            lineHeight: 1.5,
+            color: "#4b3327",
+            maxWidth: 270,
+            margin: "0 auto",
+          }}
+        >
+          {reason}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [bestMatch, setBestMatch] = useState<string>("");
-  const [leftShade, setLeftShade] = useState<string>("");
-  const [rightShade, setRightShade] = useState<string>("");
+  const [cards, setCards] = useState<ShadeCard[]>([]);
   const [reason, setReason] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -63,31 +190,8 @@ export default function App() {
 
   const resetResults = () => {
     setErrorMsg("");
-    setBestMatch("");
-    setLeftShade("");
-    setRightShade("");
+    setCards([]);
     setReason("");
-  };
-
-  const applyResult = (result: GeminiResult | null) => {
-    if (!result || !result.bestMatch) {
-      setErrorMsg("Could not analyze image.");
-      return;
-    }
-
-    const best = result.bestMatch;
-    const shadeNum = getShadeNumber(best);
-
-    setBestMatch(best);
-    setReason(result.reason || "");
-
-    if (shadeNum !== null) {
-      setLeftShade(shadeNum > 5 ? `HF${shadeNum - 1}` : "");
-      setRightShade(shadeNum < 15 ? `HF${shadeNum + 1}` : "");
-    } else {
-      setLeftShade("");
-      setRightShade("");
-    }
   };
 
   const analyzeFromBase64 = async (
@@ -100,8 +204,18 @@ export default function App() {
     setPreviewUrl(preview);
 
     try {
-      const result = await analyzeSkinTone(base64, mimeType);
-      applyResult(result);
+      const result = (await analyzeSkinTone(
+        base64,
+        mimeType
+      )) as GeminiResult | null;
+
+      if (!result || !result.bestMatch) {
+        setErrorMsg("Could not analyze image.");
+        return;
+      }
+
+      setCards(buildShadeCards(result.bestMatch));
+      setReason(result.reason || "");
     } catch (error) {
       console.error(error);
       setErrorMsg("Something went wrong while analyzing the image.");
@@ -179,80 +293,98 @@ export default function App() {
     await analyzeFromBase64(base64, mimeType, dataUrl);
   };
 
+  const leftCard =
+    cards.length === 3 ? cards[0] : cards.length === 2 ? cards[0] : null;
+  const centerCard =
+    cards.length === 3 ? cards[1] : cards.length === 1 ? cards[0] : null;
+  const rightCard =
+    cards.length === 3 ? cards[2] : cards.length === 2 ? cards[1] : null;
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        backgroundColor: "#f7f1ed",
+        backgroundColor: "#f3eeea",
         fontFamily: "Arial, sans-serif",
         color: "#3d2a1f",
-        padding: "30px 20px 60px",
+        padding: "10px 12px 40px",
         boxSizing: "border-box",
       }}
     >
-      <div style={{ textAlign: "center", marginBottom: "30px" }}>
-        <h1
+      <div style={{ textAlign: "center", marginBottom: 18 }}>
+        <div
           style={{
-            letterSpacing: "8px",
+            letterSpacing: "10px",
             color: "#9b6a3c",
-            margin: 0,
             fontWeight: 600,
+            fontSize: 22,
+            marginTop: 4,
           }}
         >
           ALTOV BEAUTY
-        </h1>
-        <p style={{ marginTop: "12px", fontSize: "22px", fontWeight: 700 }}>
-          AltoV Shade Match
-        </p>
-      </div>
+        </div>
 
-      <div style={{ textAlign: "center", marginBottom: "24px" }}>
-        <button
-          onClick={openCamera}
+        <div
           style={{
-            background: "#000",
-            color: "#fff",
-            border: "none",
-            borderRadius: "999px",
-            padding: "10px 18px",
-            marginRight: "10px",
-            cursor: "pointer",
-          }}
-        >
-          Take Photo
-        </button>
-
-        <button
-          onClick={() => uploadInputRef.current?.click()}
-          style={{
-            background: "#fff",
+            marginTop: 18,
+            fontSize: 26,
+            fontWeight: 700,
             color: "#3d2a1f",
-            border: "1px solid #d8c8bc",
-            borderRadius: "999px",
-            padding: "10px 18px",
-            cursor: "pointer",
           }}
         >
-          Upload Photo
-        </button>
+          AltoV Shade Match
+        </div>
 
-        <input
-          ref={uploadInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/jpg"
-          onChange={handleUploadChange}
-          style={{ display: "none" }}
-        />
+        <div style={{ marginTop: 18 }}>
+          <button
+            onClick={openCamera}
+            style={{
+              background: "#000",
+              color: "#fff",
+              border: "none",
+              borderRadius: 999,
+              padding: "14px 28px",
+              marginRight: 12,
+              cursor: "pointer",
+              fontSize: 16,
+            }}
+          >
+            Take Photo
+          </button>
+
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            style={{
+              background: "#fff",
+              color: "#3d2a1f",
+              border: "1px solid #d8c8bc",
+              borderRadius: 999,
+              padding: "14px 28px",
+              cursor: "pointer",
+              fontSize: 16,
+            }}
+          >
+            Upload Photo
+          </button>
+
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg"
+            onChange={handleUploadChange}
+            style={{ display: "none" }}
+          />
+        </div>
       </div>
 
       {cameraOpen && (
         <div
           style={{
-            maxWidth: "720px",
-            margin: "0 auto 28px",
+            maxWidth: 720,
+            margin: "0 auto 24px",
             background: "#fff",
-            borderRadius: "24px",
-            padding: "20px",
+            borderRadius: 24,
+            padding: 20,
             boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
             textAlign: "center",
           }}
@@ -264,22 +396,22 @@ export default function App() {
             muted
             style={{
               width: "100%",
-              maxWidth: "520px",
-              borderRadius: "16px",
+              maxWidth: 520,
+              borderRadius: 16,
               background: "#ddd",
             }}
           />
 
-          <div style={{ marginTop: "16px" }}>
+          <div style={{ marginTop: 16 }}>
             <button
               onClick={capturePhoto}
               style={{
                 background: "#9b6a3c",
                 color: "#fff",
                 border: "none",
-                borderRadius: "999px",
+                borderRadius: 999,
                 padding: "10px 18px",
-                marginRight: "10px",
+                marginRight: 10,
                 cursor: "pointer",
               }}
             >
@@ -292,7 +424,7 @@ export default function App() {
                 background: "#fff",
                 color: "#3d2a1f",
                 border: "1px solid #d8c8bc",
-                borderRadius: "999px",
+                borderRadius: 999,
                 padding: "10px 18px",
                 cursor: "pointer",
               }}
@@ -313,116 +445,59 @@ export default function App() {
         </p>
       )}
 
-      {previewUrl && (
-        <div style={{ textAlign: "center", marginBottom: "28px" }}>
-          <img
-            src={previewUrl}
-            alt="Uploaded preview"
-            style={{
-              width: "220px",
-              maxWidth: "90%",
-              borderRadius: "16px",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-            }}
-          />
-        </div>
-      )}
-
-      {bestMatch && !loading && (
-        <div
-          style={{
-            maxWidth: "950px",
-            margin: "0 auto",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "stretch",
-            gap: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          {leftShade && (
-            <div
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "320px 1fr",
+          gap: 24,
+          alignItems: "start",
+          marginTop: 10,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="Uploaded preview"
               style={{
-                width: "220px",
-                background: "#ffffff",
-                borderRadius: "28px",
-                padding: "24px",
-                textAlign: "center",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                opacity: 0.8,
+                width: 280,
+                maxWidth: "100%",
+                borderRadius: 22,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
               }}
-            >
-              <p style={{ fontSize: "20px", fontWeight: 700, marginTop: "20px" }}>
-                {leftShade}
-              </p>
-              <p style={{ color: "#9b6a3c", fontWeight: 700 }}>NEAR MATCH</p>
-            </div>
+            />
           )}
+        </div>
 
-          <div
-            style={{
-              width: "300px",
-              background: "#ffffff",
-              borderRadius: "32px",
-              padding: "28px",
-              textAlign: "center",
-              boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
-              border: "2px solid #a27043",
-            }}
-          >
+        <div>
+          {cards.length > 0 && (
             <div
               style={{
-                display: "inline-block",
-                background: "#9b6a3c",
-                color: "#fff",
-                padding: "10px 20px",
-                borderRadius: "999px",
-                fontWeight: 700,
-                letterSpacing: "2px",
-                marginBottom: "20px",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "stretch",
+                gap: 24,
+                flexWrap: "wrap",
+                marginTop: 24,
               }}
             >
-              BEST MATCH
-            </div>
-
-            <p style={{ fontSize: "48px", fontWeight: 800, margin: "10px 0" }}>
-              {bestMatch}
-            </p>
-
-            <p style={{ color: "#9b6a3c", fontWeight: 700, letterSpacing: "2px" }}>
-              PRECISION IDENTIFIED
-            </p>
-
-            {reason && (
-              <p style={{ marginTop: "18px", lineHeight: 1.5 }}>{reason}</p>
-            )}
-          </div>
-
-          {rightShade && (
-            <div
-              style={{
-                width: "220px",
-                background: "#ffffff",
-                borderRadius: "28px",
-                padding: "24px",
-                textAlign: "center",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                opacity: 0.8,
-              }}
-            >
-              <p style={{ fontSize: "20px", fontWeight: 700, marginTop: "20px" }}>
-                {rightShade}
-              </p>
-              <p style={{ color: "#9b6a3c", fontWeight: 700 }}>NEAR MATCH</p>
+              {leftCard && <ShadePanel card={leftCard} small />}
+              {centerCard && <ShadePanel card={centerCard} reason={reason} />}
+              {rightCard && <ShadePanel card={rightCard} small />}
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      <div style={{ textAlign: "center", marginTop: "50px", fontSize: "14px" }}>
+      <div
+        style={{
+          textAlign: "center",
+          marginTop: 34,
+          fontSize: 14,
+        }}
+      >
         © 2026 AltoV Beauty
       </div>
     </div>
   );
 }
-
