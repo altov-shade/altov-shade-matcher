@@ -1,5 +1,22 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+function mapBrightnessToShade(brightness: number) {
+  // brightness: 0 (dark) → 255 (light)
+
+  if (brightness < 60) return "HF5";
+  if (brightness < 80) return "HF6";
+  if (brightness < 100) return "HF7";
+  if (brightness < 120) return "HF8";
+  if (brightness < 140) return "HF9";
+  if (brightness < 160) return "HF10";
+  if (brightness < 175) return "HF11";
+  if (brightness < 190) return "HF12";
+  if (brightness < 205) return "HF13";
+  if (brightness < 220) return "HF14";
+
+  return "HF15";
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -9,12 +26,20 @@ export default async function handler(
   }
 
   try {
+    const { brightness } = req.body;
+
+    if (!brightness) {
+      return res.status(400).json({ error: "Missing brightness" });
+    }
+
+    const shade = mapBrightnessToShade(brightness);
+
     return res.status(200).json({
-      predicted_label: "HF12",
-      confidence: 0.87,
+      predicted_label: shade,
+      confidence: 0.85,
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).send("Server error while predicting shade.");
+    return res.status(500).send("Error processing image.");
   }
 }
