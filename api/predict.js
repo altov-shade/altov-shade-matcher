@@ -1,17 +1,17 @@
 import sharp from "sharp";
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", shadeName: "HF5", brightness: 72, undertone: "neutral", productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", shadeName: "HF6", brightness: 78, undertone: "warm", productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", shadeName: "HF7", brightness: 84, undertone: "neutral", productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", shadeName: "HF8", brightness: 90, undertone: "warm", productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", shadeName: "HF9", brightness: 96, undertone: "neutral", productImage: "/images/HF9.png" },
-  { shadeCode: "HF10", shadeName: "HF10", brightness: 102, undertone: "warm", productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", shadeName: "HF11", brightness: 108, undertone: "neutral", productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", shadeName: "HF12", brightness: 114, undertone: "warm", productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", shadeName: "HF13", brightness: 120, undertone: "neutral", productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", shadeName: "HF14", brightness: 126, undertone: "neutral", productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", shadeName: "HF15", brightness: 132, undertone: "warm", productImage: "/images/HF15.png" }
+  { shadeCode: "HF5", shadeName: "HF5", brightness: 66, undertone: "neutral", productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", shadeName: "HF6", brightness: 72, undertone: "warm", productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", shadeName: "HF7", brightness: 78, undertone: "neutral", productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", shadeName: "HF8", brightness: 84, undertone: "warm", productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", shadeName: "HF9", brightness: 90, undertone: "neutral", productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", shadeName: "HF10", brightness: 96, undertone: "warm", productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", shadeName: "HF11", brightness: 102, undertone: "neutral", productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", shadeName: "HF12", brightness: 108, undertone: "warm", productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", shadeName: "HF13", brightness: 114, undertone: "neutral", productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", shadeName: "HF14", brightness: 120, undertone: "neutral", productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", shadeName: "HF15", brightness: 126, undertone: "warm", productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -42,13 +42,17 @@ export default async function handler(req, res) {
     const imageBuffer = Buffer.from(cleanBase64, "base64");
 
     const cheekStats = await getLowerCheekJawStats(imageBuffer);
-    const selectedIndex = findClosestShadeIndex(cheekStats.brightness, SHADE_CATALOG);
+
+    const adjustedBrightness = applyDepthCalibration(cheekStats);
+
+    const selectedIndex = findClosestShadeIndex(adjustedBrightness, SHADE_CATALOG);
 
     const selected = SHADE_CATALOG[selectedIndex];
     const minusOne = selectedIndex > 0 ? SHADE_CATALOG[selectedIndex - 1] : null;
-    const plusOne = selectedIndex < SHADE_CATALOG.length - 1
-      ? SHADE_CATALOG[selectedIndex + 1]
-      : null;
+    const plusOne =
+      selectedIndex < SHADE_CATALOG.length - 1
+        ? SHADE_CATALOG[selectedIndex + 1]
+        : null;
 
     return res.status(200).json({
       success: true,
@@ -59,7 +63,8 @@ export default async function handler(req, res) {
         plusOne
       },
       debug: {
-        cheekBrightness: cheekStats.brightness,
+        rawBrightness: cheekStats.brightness,
+        adjustedBrightness,
         avgR: cheekStats.avgR,
         avgG: cheekStats.avgG,
         avgB: cheekStats.avgB,
@@ -84,10 +89,10 @@ async function getLowerCheekJawStats(imageBuffer) {
 
   if (!width || !height) {
     return {
-      brightness: 114,
-      avgR: 114,
-      avgG: 114,
-      avgB: 114,
+      brightness: 108,
+      avgR: 108,
+      avgG: 108,
+      avgB: 108,
       sampleCount: 0
     };
   }
@@ -101,17 +106,17 @@ async function getLowerCheekJawStats(imageBuffer) {
   const channels = normalized.info.channels;
 
   const leftRegion = {
-    xStart: Math.floor(width * 0.18),
-    xEnd: Math.floor(width * 0.36),
-    yStart: Math.floor(height * 0.60),
-    yEnd: Math.floor(height * 0.84)
+    xStart: Math.floor(width * 0.16),
+    xEnd: Math.floor(width * 0.34),
+    yStart: Math.floor(height * 0.66),
+    yEnd: Math.floor(height * 0.90)
   };
 
   const rightRegion = {
-    xStart: Math.floor(width * 0.64),
-    xEnd: Math.floor(width * 0.82),
-    yStart: Math.floor(height * 0.60),
-    yEnd: Math.floor(height * 0.84)
+    xStart: Math.floor(width * 0.66),
+    xEnd: Math.floor(width * 0.84),
+    yStart: Math.floor(height * 0.66),
+    yEnd: Math.floor(height * 0.90)
   };
 
   const samples = [];
@@ -121,10 +126,10 @@ async function getLowerCheekJawStats(imageBuffer) {
 
   if (!samples.length) {
     return {
-      brightness: 114,
-      avgR: 114,
-      avgG: 114,
-      avgB: 114,
+      brightness: 108,
+      avgR: 108,
+      avgG: 108,
+      avgB: 108,
       sampleCount: 0
     };
   }
@@ -178,22 +183,36 @@ function looksLikeSkin(r, g, b) {
   const min = Math.min(r, g, b);
 
   return (
-    r > 45 &&
-    g > 30 &&
-    b > 20 &&
+    r > 40 &&
+    g > 25 &&
+    b > 18 &&
     r > g &&
     r > b &&
     max - min > 10 &&
-    Math.abs(r - g) > 5
+    Math.abs(r - g) > 4
   );
 }
 
 function isTooBright(r, g, b) {
-  return r > 245 && g > 245 && b > 245;
+  return r > 240 && g > 240 && b > 240;
 }
 
 function isTooDark(r, g, b) {
-  return r < 20 && g < 20 && b < 20;
+  return r < 18 && g < 18 && b < 18;
+}
+
+function applyDepthCalibration(stats) {
+  const warmth = stats.avgR - stats.avgB;
+
+  let adjusted = stats.brightness;
+
+  adjusted += 10;
+
+  if (warmth > 18) {
+    adjusted += 2;
+  }
+
+  return adjusted;
 }
 
 function findClosestShadeIndex(targetBrightness, shades) {
