@@ -9,17 +9,17 @@ export const config = {
 };
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", score: 176, productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", score: 168, productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", score: 160, productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", score: 152, productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", score: 144, productImage: "/images/HF9.png" },
-  { shadeCode: "HF10", score: 136, productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", score: 128, productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", score: 120, productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", score: 112, productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", score: 104, productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", score: 96, productImage: "/images/HF15.png" }
+  { shadeCode: "HF5", score: 150, productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", score: 140, productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", score: 130, productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", score: 120, productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", score: 110, productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", score: 100, productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", score: 90, productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", score: 80, productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", score: 70, productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", score: 60, productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", score: 50, productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -48,9 +48,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No image provided" });
     }
 
-    const matchesDataUrl = rawImage.match(/^data:(image\/png|image\/jpeg|image\/jpg);base64,/i);
+    const matches = rawImage.match(/^data:(image\/png|image\/jpeg|image\/jpg);base64,/i);
 
-    if (!matchesDataUrl) {
+    if (!matches) {
       return res.status(400).json({
         error: "Only PNG and JPEG images are supported"
       });
@@ -111,47 +111,38 @@ async function getCheekStats(buffer) {
   const channels = info.channels;
 
   if (!width || !height) {
-    return {
-      medianR: 120,
-      medianG: 100,
-      medianB: 85,
-      medianLuma: 102,
-      warmth: 35
-    };
+    return fallbackStats();
   }
 
-  const leftCheek = {
-    xStart: Math.floor(width * 0.18),
-    xEnd: Math.floor(width * 0.34),
-    yStart: Math.floor(height * 0.52),
-    yEnd: Math.floor(height * 0.76)
-  };
-
-  const rightCheek = {
-    xStart: Math.floor(width * 0.66),
-    xEnd: Math.floor(width * 0.82),
-    yStart: Math.floor(height * 0.52),
-    yEnd: Math.floor(height * 0.76)
-  };
+  const regions = [
+    {
+      xStart: Math.floor(width * 0.18),
+      xEnd: Math.floor(width * 0.34),
+      yStart: Math.floor(height * 0.52),
+      yEnd: Math.floor(height * 0.76)
+    },
+    {
+      xStart: Math.floor(width * 0.66),
+      xEnd: Math.floor(width * 0.82),
+      yStart: Math.floor(height * 0.52),
+      yEnd: Math.floor(height * 0.76)
+    }
+  ];
 
   const pixels = [];
-  collectPixels(data, width, channels, leftCheek, pixels);
-  collectPixels(data, width, channels, rightCheek, pixels);
+
+  regions.forEach(region => {
+    collectPixels(data, width, channels, region, pixels);
+  });
 
   if (!pixels.length) {
-    return {
-      medianR: 120,
-      medianG: 100,
-      medianB: 85,
-      medianLuma: 102,
-      warmth: 35
-    };
+    return fallbackStats();
   }
 
-  const rs = pixels.map((p) => p.r).sort((a, b) => a - b);
-  const gs = pixels.map((p) => p.g).sort((a, b) => a - b);
-  const bs = pixels.map((p) => p.b).sort((a, b) => a - b);
-  const ls = pixels.map((p) => p.luma).sort((a, b) => a - b);
+  const rs = pixels.map(p => p.r).sort((a, b) => a - b);
+  const gs = pixels.map(p => p.g).sort((a, b) => a - b);
+  const bs = pixels.map(p => p.b).sort((a, b) => a - b);
+  const ls = pixels.map(p => p.luma).sort((a, b) => a - b);
 
   const medianR = median(rs);
   const medianG = median(gs);
@@ -177,13 +168,7 @@ function collectPixels(data, width, channels, region, pixels) {
       const g = data[idx + 1];
       const b = data[idx + 2];
 
-      if (
-        typeof r !== "number" ||
-        typeof g !== "number" ||
-        typeof b !== "number"
-      ) {
-        continue;
-      }
+      if (r === undefined || g === undefined || b === undefined) continue;
 
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
       const max = Math.max(r, g, b);
@@ -191,11 +176,8 @@ function collectPixels(data, width, channels, region, pixels) {
       const chroma = max - min;
 
       if (r > 240 && g > 240 && b > 240) continue;
-      if (luma < 35) continue;
-      if (luma > 205) continue;
-      if (r < 45 || g < 35 || b < 25) continue;
-      if (!(r >= g && g >= b - 12)) continue;
-      if (chroma < 10 || chroma > 95) continue;
+      if (luma < 40 || luma > 210) continue;
+      if (chroma < 10 || chroma > 90) continue;
       if (r - b < 8) continue;
 
       pixels.push({ r, g, b, luma });
@@ -203,38 +185,43 @@ function collectPixels(data, width, channels, region, pixels) {
   }
 }
 
-function median(values) {
-  const mid = Math.floor(values.length / 2);
-  if (values.length % 2 === 0) {
-    return Math.round((values[mid - 1] + values[mid]) / 2);
-  }
-  return values[mid];
+function median(arr) {
+  const mid = Math.floor(arr.length / 2);
+  return arr.length % 2 === 0
+    ? Math.round((arr[mid - 1] + arr[mid]) / 2)
+    : arr[mid];
+}
+
+function fallbackStats() {
+  return {
+    medianR: 120,
+    medianG: 100,
+    medianB: 85,
+    medianLuma: 105,
+    warmth: 35
+  };
 }
 
 function buildShadeScore(stats) {
-  const inverseDepth = 260 - stats.medianLuma;
+  const depth = 240 - stats.medianLuma;
+  const normalizedDepth = depth * 0.75;
 
-  const warmthBoost = Math.max(
-    0,
-    Math.min(8, Math.round((stats.warmth - 15) * 0.15))
+  const warmthAdjust = Math.max(
+    -4,
+    Math.min(6, (stats.warmth - 20) * 0.1)
   );
 
-  let depthAdjust = 0;
-
-  if (stats.medianLuma < 110) depthAdjust += 6;
-  else if (stats.medianLuma < 130) depthAdjust += 3;
-
-  return inverseDepth + warmthBoost + depthAdjust;
+  return normalizedDepth + warmthAdjust;
 }
 
 function findClosestShadeIndex(score) {
   let closest = 0;
-  let smallestDiff = Math.abs(score - SHADE_CATALOG[0].score);
+  let minDiff = Math.abs(score - SHADE_CATALOG[0].score);
 
   for (let i = 1; i < SHADE_CATALOG.length; i++) {
     const diff = Math.abs(score - SHADE_CATALOG[i].score);
-    if (diff < smallestDiff) {
-      smallestDiff = diff;
+    if (diff < minDiff) {
+      minDiff = diff;
       closest = i;
     }
   }
