@@ -9,20 +9,32 @@ export const config = {
 };
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", score: 180 },
-  { shadeCode: "HF6", score: 165 },
-  { shadeCode: "HF7", score: 150 },
-  { shadeCode: "HF8", score: 138 },
-  { shadeCode: "HF9", score: 126 },
-  { shadeCode: "HF10", score: 114 },
-  { shadeCode: "HF11", score: 102 },
-  { shadeCode: "HF12", score: 90 },
-  { shadeCode: "HF13", score: 78 },
-  { shadeCode: "HF14", score: 66 },
-  { shadeCode: "HF15", score: 50 }
+  { shadeCode: "HF5", score: 180, productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", score: 165, productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", score: 150, productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", score: 138, productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", score: 126, productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", score: 114, productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", score: 102, productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", score: 90, productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", score: 78, productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", score: 66, productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", score: 50, productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
   try {
     const body = req.body || {};
 
@@ -39,7 +51,9 @@ export default async function handler(req, res) {
     const matches = rawImage.match(/^data:(image\/png|image\/jpeg|image\/jpg);base64,/i);
 
     if (!matches) {
-      return res.status(400).json({ error: "Only PNG and JPEG supported" });
+      return res.status(400).json({
+        error: "Only PNG and JPEG supported"
+      });
     }
 
     const base64 = rawImage.split(",")[1];
@@ -50,17 +64,23 @@ export default async function handler(req, res) {
     const index = findClosestShadeIndex(score);
 
     const selected = SHADE_CATALOG[index];
+    const minusOne = index > 0 ? SHADE_CATALOG[index - 1] : null;
+    const plusOne = index < SHADE_CATALOG.length - 1 ? SHADE_CATALOG[index + 1] : null;
 
     return res.status(200).json({
       success: true,
       match: selected,
+      range: {
+        minusOne,
+        selected,
+        plusOne
+      },
       debug: {
         luma: stats.medianLuma,
         warmth: stats.warmth,
         score
       }
     });
-
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Prediction failed" });
@@ -86,19 +106,19 @@ async function getCheekStats(buffer) {
     { x1: width * 0.65, x2: width * 0.8, y1: height * 0.55, y2: height * 0.75 }
   ];
 
-  regions.forEach(r => {
-    for (let y = r.y1; y < r.y2; y += 2) {
-      for (let x = r.x1; x < r.x2; x += 2) {
+  regions.forEach((region) => {
+    for (let y = region.y1; y < region.y2; y += 2) {
+      for (let x = region.x1; x < region.x2; x += 2) {
         const idx = (Math.floor(y) * width + Math.floor(x)) * channels;
 
-        const rVal = data[idx];
-        const gVal = data[idx + 1];
-        const bVal = data[idx + 2];
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
 
-        if (!rVal || !gVal || !bVal) continue;
+        if (r === undefined || g === undefined || b === undefined) continue;
 
-        const luma = 0.299 * rVal + 0.587 * gVal + 0.114 * bVal;
-        const warmth = rVal - bVal;
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        const warmth = r - b;
 
         if (luma < 50 || luma > 230) continue;
         if (warmth < 5) continue;
@@ -124,20 +144,19 @@ async function getCheekStats(buffer) {
 function buildShadeScore(stats) {
   const luma = stats.medianLuma;
 
-  // 👇 NEW: lighter skin correction
   let depth = 255 - luma;
+  depth *= 0.72;
 
-  // soften everything
-  depth *= 0.75;
+  if (luma > 185) depth -= 28;
+  if (luma > 210) depth -= 12;
 
-  // 👇 KEY FIX: boost light tones
-  if (luma > 180) depth -= 25;
-  if (luma > 200) depth -= 15;
+  if (luma >= 130 && luma <= 170) {
+    depth += 6;
+  }
 
-  // warmth influence (small)
   const warmthAdjust = Math.max(
-    -6,
-    Math.min(5, (stats.warmth - 15) * 0.1)
+    -5,
+    Math.min(4, (stats.warmth - 18) * 0.08)
   );
 
   return depth + warmthAdjust;
