@@ -2,6 +2,13 @@ import React, { useMemo, useRef, useState } from "react";
 import { getNeighborShades } from "./lib/shades";
 import type { ShadeResult } from "./lib/shades";
 
+type CheekStats = {
+  brightness: number;
+  avgR: number;
+  avgG: number;
+  avgB: number;
+};
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -15,15 +22,21 @@ function App() {
     return Math.round(result.confidence * 100);
   }, [result]);
 
-  // ✅ NEW CHEEK-BASED BRIGHTNESS
-  const getBrightness = (image: HTMLImageElement) => {
+  const getCheekStats = (image: HTMLImageElement): CheekStats => {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
 
     canvas.width = image.width;
     canvas.height = image.height;
 
-    if (!ctx) return 150;
+    if (!ctx) {
+      return {
+        brightness: 150,
+        avgR: 150,
+        avgG: 130,
+        avgB: 120,
+      };
+    }
 
     ctx.drawImage(image, 0, 0);
 
@@ -36,37 +49,73 @@ function App() {
       const imageData = ctx.getImageData(startX, startY, width, height);
       const data = imageData.data;
 
-      let total = 0;
+      let totalBrightness = 0;
+      let totalR = 0;
+      let totalG = 0;
+      let totalB = 0;
       let count = 0;
 
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i];
         const g = data[i + 1];
         const b = data[i + 2];
+        const a = data[i + 3];
 
-        const brightness = (r + g + b) / 3;
-        total += brightness;
+        if (a < 200) continue;
+
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const saturation = max === 0 ? 0 : (max - min) / max;
+
+        const looksLikeSkin =
+          r > 45 &&
+          g > 34 &&
+          b > 20 &&
+          r > b &&
+          r >= g - 10 &&
+          Math.abs(r - g) < 80 &&
+          saturation > 0.08 &&
+          saturation < 0.65;
+
+        if (!looksLikeSkin) continue;
+
+        const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+
+        totalBrightness += brightness;
+        totalR += r;
+        totalG += g;
+        totalB += b;
         count++;
       }
 
-      return count > 0 ? total / count : 150;
+      if (count === 0) {
+        return {
+          brightness: 150,
+          avgR: 150,
+          avgG: 130,
+          avgB: 120,
+        };
+      }
+
+      return {
+        brightness: totalBrightness / count,
+        avgR: totalR / count,
+        avgG: totalG / count,
+        avgB: totalB / count,
+      };
     };
 
     const patchSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.12);
 
-    const leftCheek = samplePatch(
-      canvas.width * 0.35,
-      canvas.height * 0.58,
-      patchSize
-    );
+    const left = samplePatch(canvas.width * 0.35, canvas.height * 0.58, patchSize);
+    const right = samplePatch(canvas.width * 0.65, canvas.height * 0.58, patchSize);
 
-    const rightCheek = samplePatch(
-      canvas.width * 0.65,
-      canvas.height * 0.58,
-      patchSize
-    );
-
-    return (leftCheek + rightCheek) / 2;
+    return {
+      brightness: (left.brightness + right.brightness) / 2,
+      avgR: (left.avgR + right.avgR) / 2,
+      avgG: (left.avgG + right.avgG) / 2,
+      avgB: (left.avgB + right.avgB) / 2,
+    };
   };
 
   const handleFileChange = async (file: File | null) => {
@@ -82,7 +131,6 @@ function App() {
     setSelectedFile(file);
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
-
     setLoading(true);
 
     const img = new Image();
@@ -90,14 +138,14 @@ function App() {
 
     img.onload = async () => {
       try {
-        const brightness = getBrightness(img);
+        const stats = getCheekStats(img);
 
         const response = await fetch("/api/predict", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ brightness }),
+          body: JSON.stringify(stats),
         });
 
         if (!response.ok) {
@@ -321,20 +369,17 @@ function App() {
                       width: "180px",
                       height: "250px",
                       background: "#f4f4f4",
+                      borderRadius: "18px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       marginBottom: "26px",
+                      color: "#7a4d21",
+                      fontWeight: 600,
+                      fontSize: isCenter ? "24px" : "20px",
                     }}
                   >
-                    <img
-                      src="/altoV Favicon.png"
-                      alt={shade}
-                      style={{
-                        maxWidth: isCenter ? "110px" : "85px",
-                        opacity: isCenter ? 1 : 0.75,
-                      }}
-                    />
+                    {shade}
                   </div>
 
                   <div
@@ -368,6 +413,12 @@ function App() {
         {!previewUrl && !result && (
           <div style={{ color: "#6c5a4c", marginTop: "20px" }}>
             Upload or take a clear face photo to begin.
+          </div>
+        )}
+
+        {confidencePercent !== null && (
+          <div style={{ marginTop: "24px", color: "#5a4638" }}>
+            Confidence: {confidencePercent}%
           </div>
         )}
 
