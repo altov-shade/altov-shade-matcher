@@ -47,9 +47,10 @@ export default async function handler(req, res) {
 
     const selected = SHADE_CATALOG[selectedIndex];
     const minusOne = selectedIndex > 0 ? SHADE_CATALOG[selectedIndex - 1] : null;
-    const plusOne = selectedIndex < SHADE_CATALOG.length - 1
-      ? SHADE_CATALOG[selectedIndex + 1]
-      : null;
+    const plusOne =
+      selectedIndex < SHADE_CATALOG.length - 1
+        ? SHADE_CATALOG[selectedIndex + 1]
+        : null;
 
     return res.status(200).json({
       success: true,
@@ -105,17 +106,17 @@ async function getCheekSkinStats(imageBuffer) {
   const channels = normalized.info.channels;
 
   const leftCheek = {
-    xStart: Math.floor(width * 0.20),
+    xStart: Math.floor(width * 0.18),
     xEnd: Math.floor(width * 0.34),
-    yStart: Math.floor(height * 0.48),
-    yEnd: Math.floor(height * 0.68)
+    yStart: Math.floor(height * 0.54),
+    yEnd: Math.floor(height * 0.78)
   };
 
   const rightCheek = {
     xStart: Math.floor(width * 0.66),
-    xEnd: Math.floor(width * 0.80),
-    yStart: Math.floor(height * 0.48),
-    yEnd: Math.floor(height * 0.68)
+    xEnd: Math.floor(width * 0.82),
+    yStart: Math.floor(height * 0.54),
+    yEnd: Math.floor(height * 0.78)
   };
 
   const pixels = [];
@@ -189,17 +190,17 @@ function collectValidCheekPixels(data, width, channels, region, pixels) {
 
 function looksLikeSkin(r, g, b, luma, chroma) {
   return (
-    r > 70 &&
-    g > 45 &&
-    b > 35 &&
+    r > 75 &&
+    g > 50 &&
+    b > 38 &&
     r > g &&
-    g >= b - 8 &&
-    luma > 80 &&
+    g >= b - 10 &&
+    luma > 88 &&
     luma < 205 &&
     chroma > 12 &&
-    chroma < 95 &&
-    (r - g) > 6 &&
-    (r - b) > 12
+    chroma < 92 &&
+    (r - g) > 7 &&
+    (r - b) > 14
   );
 }
 
@@ -208,19 +209,19 @@ function isNearWhiteBackground(r, g, b) {
 }
 
 function isTooDark(r, g, b, luma) {
-  return luma < 65 || (r < 45 && g < 45 && b < 45);
+  return luma < 72 || (r < 48 && g < 48 && b < 48);
 }
 
 function isTooBright(r, g, b, luma) {
-  return luma > 220 || (r > 245 && g > 245 && b > 245);
+  return luma > 214 || (r > 242 && g > 242 && b > 242);
 }
 
 function isLikelyHair(r, g, b, luma, chroma) {
-  return luma < 85 && chroma < 55;
+  return luma < 92 && chroma < 58;
 }
 
 function isLikelyLipOrHeavyBlush(r, g, b) {
-  return r > 150 && (r - g) > 38 && (r - b) > 45;
+  return r > 150 && (r - g) > 34 && (r - b) > 42;
 }
 
 function medianFromSorted(values) {
@@ -232,11 +233,11 @@ function medianFromSorted(values) {
 }
 
 function buildShadeScore(stats) {
-  const base = stats.medianLuma;
-  const warmthBoost = Math.max(0, Math.min(18, Math.round((stats.warmth - 28) * 0.35)));
-  const depthBoost = 22;
+  const inverseDepth = 300 - stats.medianLuma;
+  const warmthBoost = Math.max(0, Math.min(14, Math.round((stats.warmth - 18) * 0.4)));
+  const depthBoost = 6;
 
-  return base + warmthBoost + depthBoost;
+  return inverseDepth + warmthBoost + depthBoost;
 }
 
 function findClosestShadeIndex(targetScore, shades) {
