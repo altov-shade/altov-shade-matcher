@@ -1,17 +1,17 @@
 import sharp from "sharp";
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", shadeName: "HF5", score: 112, undertone: "neutral", productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", shadeName: "HF6", score: 120, undertone: "warm", productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", shadeName: "HF7", score: 128, undertone: "neutral", productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", shadeName: "HF8", score: 136, undertone: "warm", productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", shadeName: "HF9", score: 144, undertone: "neutral", productImage: "/images/HF9.png" },
-  { shadeCode: "HF10", shadeName: "HF10", score: 152, undertone: "warm", productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", shadeName: "HF11", score: 160, undertone: "neutral", productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", shadeName: "HF12", score: 168, undertone: "warm", productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", shadeName: "HF13", score: 176, undertone: "neutral", productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", shadeName: "HF14", score: 184, undertone: "neutral", productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", shadeName: "HF15", score: 192, undertone: "warm", productImage: "/images/HF15.png" }
+  { shadeCode: "HF5", shadeName: "HF5", score: 126, undertone: "neutral", productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", shadeName: "HF6", score: 134, undertone: "warm", productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", shadeName: "HF7", score: 142, undertone: "neutral", productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", shadeName: "HF8", score: 150, undertone: "warm", productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", shadeName: "HF9", score: 158, undertone: "neutral", productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", shadeName: "HF10", score: 166, undertone: "warm", productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", shadeName: "HF11", score: 174, undertone: "neutral", productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", shadeName: "HF12", score: 182, undertone: "warm", productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", shadeName: "HF13", score: 190, undertone: "neutral", productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", shadeName: "HF14", score: 198, undertone: "neutral", productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", shadeName: "HF15", score: 206, undertone: "warm", productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -88,10 +88,10 @@ async function getCheekSkinStats(imageBuffer) {
 
   if (!width || !height) {
     return {
-      medianR: 160,
-      medianG: 130,
-      medianB: 105,
-      medianLuma: 138,
+      medianR: 150,
+      medianG: 120,
+      medianB: 95,
+      medianLuma: 128,
       warmth: 55,
       sampleCount: 0
     };
@@ -106,17 +106,17 @@ async function getCheekSkinStats(imageBuffer) {
   const channels = normalized.info.channels;
 
   const leftCheek = {
-    xStart: Math.floor(width * 0.18),
+    xStart: Math.floor(width * 0.20),
     xEnd: Math.floor(width * 0.34),
-    yStart: Math.floor(height * 0.54),
-    yEnd: Math.floor(height * 0.78)
+    yStart: Math.floor(height * 0.52),
+    yEnd: Math.floor(height * 0.74)
   };
 
   const rightCheek = {
     xStart: Math.floor(width * 0.66),
-    xEnd: Math.floor(width * 0.82),
-    yStart: Math.floor(height * 0.54),
-    yEnd: Math.floor(height * 0.78)
+    xEnd: Math.floor(width * 0.80),
+    yStart: Math.floor(height * 0.52),
+    yEnd: Math.floor(height * 0.74)
   };
 
   const pixels = [];
@@ -125,10 +125,10 @@ async function getCheekSkinStats(imageBuffer) {
 
   if (!pixels.length) {
     return {
-      medianR: 160,
-      medianG: 130,
-      medianB: 105,
-      medianLuma: 138,
+      medianR: 150,
+      medianG: 120,
+      medianB: 95,
+      medianLuma: 128,
       warmth: 55,
       sampleCount: 0
     };
@@ -190,38 +190,38 @@ function collectValidCheekPixels(data, width, channels, region, pixels) {
 
 function looksLikeSkin(r, g, b, luma, chroma) {
   return (
-    r > 75 &&
-    g > 50 &&
-    b > 38 &&
+    r > 72 &&
+    g > 48 &&
+    b > 36 &&
     r > g &&
     g >= b - 10 &&
-    luma > 88 &&
+    luma > 84 &&
     luma < 205 &&
-    chroma > 12 &&
-    chroma < 92 &&
-    (r - g) > 7 &&
-    (r - b) > 14
+    chroma > 10 &&
+    chroma < 90 &&
+    (r - g) > 6 &&
+    (r - b) > 12
   );
 }
 
 function isNearWhiteBackground(r, g, b) {
-  return r > 235 && g > 235 && b > 235;
+  return r > 236 && g > 236 && b > 236;
 }
 
 function isTooDark(r, g, b, luma) {
-  return luma < 72 || (r < 48 && g < 48 && b < 48);
+  return luma < 70 || (r < 46 && g < 46 && b < 46);
 }
 
 function isTooBright(r, g, b, luma) {
-  return luma > 214 || (r > 242 && g > 242 && b > 242);
+  return luma > 210 || (r > 240 && g > 240 && b > 240);
 }
 
 function isLikelyHair(r, g, b, luma, chroma) {
-  return luma < 92 && chroma < 58;
+  return luma < 88 && chroma < 56;
 }
 
 function isLikelyLipOrHeavyBlush(r, g, b) {
-  return r > 150 && (r - g) > 34 && (r - b) > 42;
+  return r > 158 && (r - g) > 36 && (r - b) > 42;
 }
 
 function medianFromSorted(values) {
@@ -234,8 +234,8 @@ function medianFromSorted(values) {
 
 function buildShadeScore(stats) {
   const inverseDepth = 300 - stats.medianLuma;
-  const warmthBoost = Math.max(0, Math.min(14, Math.round((stats.warmth - 18) * 0.4)));
-  const depthBoost = 6;
+  const warmthBoost = Math.max(0, Math.min(12, Math.round((stats.warmth - 20) * 0.28)));
+  const depthBoost = 2;
 
   return inverseDepth + warmthBoost + depthBoost;
 }
