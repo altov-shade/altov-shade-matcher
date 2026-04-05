@@ -1,0 +1,20 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    return res.status(200).json({
+      predicted_label: "HF12",
+      confidence: 0.87,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send("Server error while predicting shade.");
+  }
+}
