@@ -46,7 +46,10 @@ export default async function handler(req, res) {
 
     const selected = SHADE_CATALOG[index];
     const minusOne = index > 0 ? SHADE_CATALOG[index - 1] : null;
-    const plusOne = index < SHADE_CATALOG.length - 1 ? SHADE_CATALOG[index + 1] : null;
+    const plusOne =
+      index < SHADE_CATALOG.length - 1
+        ? SHADE_CATALOG[index + 1]
+        : null;
 
     return res.status(200).json({
       success: true,
@@ -69,7 +72,8 @@ export default async function handler(req, res) {
     console.error("Prediction error:", error);
     return res.status(500).json({
       error: "Prediction failed",
-      details: error instanceof Error ? error.message : "Unknown server error"
+      details:
+        error instanceof Error ? error.message : "Unknown server error"
     });
   }
 }
@@ -188,16 +192,18 @@ function median(values) {
 
 function buildShadeScore(stats) {
   const inverseDepth = 260 - stats.medianLuma;
-  const warmthBoost = Math.max(0, Math.min(10, Math.round((stats.warmth - 15) * 0.2)));
 
-  let webcamDepthBoost = 0;
+  const warmthBoost = Math.max(
+    0,
+    Math.min(8, Math.round((stats.warmth - 15) * 0.15))
+  );
 
-  if (stats.medianLuma < 120) webcamDepthBoost += 12;
-  if (stats.medianLuma < 105) webcamDepthBoost += 10;
-  if (stats.medianLuma < 92) webcamDepthBoost += 10;
-  if (stats.medianLuma < 82) webcamDepthBoost += 10;
+  let depthAdjust = 0;
 
-  return inverseDepth + warmthBoost + webcamDepthBoost;
+  if (stats.medianLuma < 110) depthAdjust += 6;
+  else if (stats.medianLuma < 130) depthAdjust += 3;
+
+  return inverseDepth + warmthBoost + depthAdjust;
 }
 
 function findClosestShadeIndex(score) {
