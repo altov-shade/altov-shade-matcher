@@ -15,6 +15,7 @@ function App() {
     return Math.round(result.confidence * 100);
   }, [result]);
 
+  // ✅ NEW CHEEK-BASED BRIGHTNESS
   const getBrightness = (image: HTMLImageElement) => {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
@@ -22,26 +23,50 @@ function App() {
     canvas.width = image.width;
     canvas.height = image.height;
 
-    ctx?.drawImage(image, 0, 0);
+    if (!ctx) return 150;
 
-    const imageData = ctx?.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData?.data;
+    ctx.drawImage(image, 0, 0);
 
-    let total = 0;
-    let count = 0;
+    const samplePatch = (centerX: number, centerY: number, patchSize: number) => {
+      const startX = Math.max(0, Math.floor(centerX - patchSize / 2));
+      const startY = Math.max(0, Math.floor(centerY - patchSize / 2));
+      const width = Math.min(patchSize, canvas.width - startX);
+      const height = Math.min(patchSize, canvas.height - startY);
 
-    for (let i = 0; i < data!.length; i += 4) {
-      const r = data![i];
-      const g = data![i + 1];
-      const b = data![i + 2];
+      const imageData = ctx.getImageData(startX, startY, width, height);
+      const data = imageData.data;
 
-      const brightness = (r + g + b) / 3;
+      let total = 0;
+      let count = 0;
 
-      total += brightness;
-      count++;
-    }
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
 
-    return total / count;
+        const brightness = (r + g + b) / 3;
+        total += brightness;
+        count++;
+      }
+
+      return count > 0 ? total / count : 150;
+    };
+
+    const patchSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.12);
+
+    const leftCheek = samplePatch(
+      canvas.width * 0.35,
+      canvas.height * 0.58,
+      patchSize
+    );
+
+    const rightCheek = samplePatch(
+      canvas.width * 0.65,
+      canvas.height * 0.58,
+      patchSize
+    );
+
+    return (leftCheek + rightCheek) / 2;
   };
 
   const handleFileChange = async (file: File | null) => {
