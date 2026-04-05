@@ -1,26 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-
-function mapBrightnessToShade(brightness: number) {
-  // brightness: 0 (dark) → 255 (light)
-
-  if (brightness < 60) return "HF5";
-  if (brightness < 80) return "HF6";
-  if (brightness < 100) return "HF7";
-  if (brightness < 120) return "HF8";
-  if (brightness < 140) return "HF9";
-  if (brightness < 160) return "HF10";
-  if (brightness < 175) return "HF11";
-  if (brightness < 190) return "HF12";
-  if (brightness < 205) return "HF13";
-  if (brightness < 220) return "HF14";
-
-  return "HF15";
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -28,11 +6,21 @@ export default async function handler(
   try {
     const { brightness } = req.body;
 
-    if (!brightness) {
+    if (brightness === undefined) {
       return res.status(400).json({ error: "Missing brightness" });
     }
 
-    const shade = mapBrightnessToShade(brightness);
+    let shade = "HF15";
+    if (brightness < 60) shade = "HF5";
+    else if (brightness < 80) shade = "HF6";
+    else if (brightness < 100) shade = "HF7";
+    else if (brightness < 120) shade = "HF8";
+    else if (brightness < 140) shade = "HF9";
+    else if (brightness < 160) shade = "HF10";
+    else if (brightness < 175) shade = "HF11";
+    else if (brightness < 190) shade = "HF12";
+    else if (brightness < 205) shade = "HF13";
+    else if (brightness < 220) shade = "HF14";
 
     return res.status(200).json({
       predicted_label: shade,
@@ -40,6 +28,6 @@ export default async function handler(
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).send("Error processing image.");
+    return res.status(500).json({ error: "Error processing image" });
   }
 }
