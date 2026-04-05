@@ -1,25 +1,31 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 
-type ShadeResult = {
+type ShadeCard = {
   shadeCode: string;
   shadeName: string;
   productImage?: string;
   undertone?: string;
 };
 
+type ApiResponse = {
+  success: boolean;
+  match: ShadeCard;
+  range: {
+    minusOne: ShadeCard | null;
+    selected: ShadeCard;
+    plusOne: ShadeCard | null;
+  };
+};
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [result, setResult] = useState<ShadeResult | null>(null);
+  const [result, setResult] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  const confidencePercent = useMemo(() => {
-    if (!result) return null;
-    return 88;
-  }, [result]);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const onPickFile = (file: File | null) => {
     if (!file) return;
@@ -58,7 +64,7 @@ function App() {
 
   const analyzeImage = async () => {
     if (!selectedFile) {
-      setErrorMsg("Please upload or take a photo first.");
+      setErrorMsg("Please upload or take a clear face photo first.");
       return;
     }
 
@@ -83,11 +89,7 @@ function App() {
         throw new Error(data?.error || "Prediction failed.");
       }
 
-      if (!data?.match) {
-        throw new Error("No shade match returned.");
-      }
-
-      setResult(data.match);
+      setResult(data);
     } catch (error: any) {
       setErrorMsg(error?.message || "Something went wrong during analysis.");
     } finally {
@@ -106,433 +108,413 @@ function App() {
     setLoading(false);
     setErrorMsg("");
 
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(180deg, #0e0e10 0%, #17171b 100%)",
-        color: "#ffffff",
-        fontFamily:
-          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        padding: "24px",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: "1080px",
-          margin: "0 auto",
-        }}
-      >
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: "28px",
-          }}
-        >
-          <div
-            style={{
-              display: "inline-block",
-              padding: "8px 14px",
-              borderRadius: "999px",
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.12)",
-              fontSize: "13px",
-              letterSpacing: "0.04em",
-              marginBottom: "18px",
-            }}
-          >
-            AltoV Beauty
-          </div>
+    <div style={styles.page}>
+      <div style={styles.wrapper}>
+        <div style={styles.brand}>ALTOV BEAUTY</div>
+        <div style={styles.title}>AltoV Shade Match</div>
 
-          <h1
-            style={{
-              margin: 0,
-              fontSize: "clamp(2rem, 5vw, 3.5rem)",
-              fontWeight: 800,
-              lineHeight: 1.05,
-            }}
+        <div style={styles.topButtons}>
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            style={styles.blackButton}
+            type="button"
           >
-            AI Shade Match
-          </h1>
+            Take Photo
+          </button>
 
-          <p
-            style={{
-              marginTop: "14px",
-              color: "rgba(255,255,255,0.72)",
-              fontSize: "1rem",
-              maxWidth: "720px",
-              marginLeft: "auto",
-              marginRight: "auto",
-              lineHeight: 1.6,
-            }}
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            style={styles.whiteButton}
+            type="button"
           >
-            Upload a photo or take one now. We’ll analyze it and return your closest AltoV Beauty shade match.
-          </p>
+            Upload Photo
+          </button>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: "24px",
-            alignItems: "start",
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "28px",
-              padding: "22px",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: "18px",
-                fontSize: "1.2rem",
-              }}
-            >
-              Add your photo
-            </h2>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+        />
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
-                marginBottom: "18px",
-              }}
-            >
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={primaryButtonStyle}
-              >
-                Upload Photo
-              </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+        />
 
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                style={secondaryButtonStyle}
-              >
-                Take Photo
-              </button>
+        {!previewUrl && !result && (
+          <div style={styles.helperText}>
+            Upload or take a clear face photo to begin.
+          </div>
+        )}
+
+        {previewUrl && !result && (
+          <div style={styles.previewSection}>
+            <div style={styles.previewFrame}>
+              <img src={previewUrl} alt="Preview" style={styles.previewImage} />
             </div>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
-
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="user"
-              onChange={handleFileChange}
-              style={{ display: "none" }}
-            />
-
-            <div
-              style={{
-                minHeight: "320px",
-                borderRadius: "24px",
-                border: "1px dashed rgba(255,255,255,0.2)",
-                background: "rgba(255,255,255,0.03)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                overflow: "hidden",
-                padding: "14px",
-              }}
-            >
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt="Selected preview"
-                  style={{
-                    width: "100%",
-                    maxHeight: "520px",
-                    objectFit: "contain",
-                    borderRadius: "18px",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    textAlign: "center",
-                    color: "rgba(255,255,255,0.55)",
-                    lineHeight: 1.6,
-                    padding: "24px",
-                  }}
-                >
-                  Add a clear photo with even lighting.
-                  <br />
-                  Cheek color tends to give the best match.
-                </div>
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "12px",
-                marginTop: "18px",
-              }}
-            >
+            <div style={styles.actionRow}>
               <button
                 onClick={analyzeImage}
+                style={styles.findShadeButton}
+                type="button"
                 disabled={loading}
-                style={{
-                  ...primaryButtonStyle,
-                  opacity: loading ? 0.7 : 1,
-                  cursor: loading ? "not-allowed" : "pointer",
-                }}
               >
                 {loading ? "Matching..." : "Find My Shade"}
               </button>
 
-              <button
-                onClick={resetAll}
-                style={ghostButtonStyle}
-              >
+              <button onClick={resetAll} style={styles.smallResetButton} type="button">
                 Reset
               </button>
             </div>
-
-            {errorMsg ? (
-              <div
-                style={{
-                  marginTop: "16px",
-                  background: "rgba(255, 94, 94, 0.12)",
-                  border: "1px solid rgba(255, 94, 94, 0.35)",
-                  color: "#ffd4d4",
-                  padding: "14px 16px",
-                  borderRadius: "16px",
-                  lineHeight: 1.5,
-                }}
-              >
-                {errorMsg}
-              </div>
-            ) : null}
           </div>
+        )}
 
-          <div
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "28px",
-              padding: "22px",
-              minHeight: "100%",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <h2
-              style={{
-                marginTop: 0,
-                marginBottom: "18px",
-                fontSize: "1.2rem",
-              }}
-            >
-              Your result
-            </h2>
-
-            {!result ? (
-              <div
-                style={{
-                  minHeight: "420px",
-                  borderRadius: "24px",
-                  border: "1px dashed rgba(255,255,255,0.2)",
-                  background: "rgba(255,255,255,0.03)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  textAlign: "center",
-                  color: "rgba(255,255,255,0.55)",
-                  padding: "24px",
-                  lineHeight: 1.6,
-                }}
-              >
-                Your match will appear here after analysis.
+        {result && (
+          <div style={styles.resultShell}>
+            <div style={styles.resultGrid}>
+              <div style={styles.faceColumn}>
+                {previewUrl ? (
+                  <div style={styles.faceImageFrame}>
+                    <img src={previewUrl} alt="Selected face" style={styles.faceImage} />
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gap: "18px",
-                }}
-              >
-                <div
-                  style={{
-                    borderRadius: "24px",
-                    background: "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    padding: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "rgba(255,255,255,0.65)",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    Best Match
-                  </div>
 
-                  <div
-                    style={{
-                      fontSize: "2rem",
-                      fontWeight: 800,
-                      marginBottom: "6px",
-                    }}
-                  >
-                    {result.shadeCode}
-                  </div>
+              <ShadeOptionCard card={result.range.minusOne} label="NEAR MATCH" isBest={false} />
 
-                  <div
-                    style={{
-                      color: "rgba(255,255,255,0.82)",
-                      fontSize: "1rem",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    {result.shadeName}
-                  </div>
+              <ShadeOptionCard
+                card={result.range.selected}
+                label="PRECISION IDENTIFIED"
+                isBest={true}
+              />
 
-                  {result.undertone ? (
-                    <div
-                      style={{
-                        display: "inline-block",
-                        padding: "8px 12px",
-                        borderRadius: "999px",
-                        background: "rgba(255,255,255,0.08)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        fontSize: "14px",
-                      }}
-                    >
-                      Undertone: {result.undertone}
-                    </div>
-                  ) : null}
+              <ShadeOptionCard card={result.range.plusOne} label="NEAR MATCH" isBest={false} />
+            </div>
 
-                  {confidencePercent !== null ? (
-                    <div
-                      style={{
-                        marginTop: "16px",
-                        color: "rgba(255,255,255,0.66)",
-                        fontSize: "14px",
-                      }}
-                    >
-                      Match confidence: {confidencePercent}%
-                    </div>
-                  ) : null}
-                </div>
-
-                <div
-                  style={{
-                    borderRadius: "24px",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    padding: "20px",
-                    textAlign: "center",
-                  }}
-                >
-                  {result.productImage ? (
-                    <img
-                      src={result.productImage}
-                      alt={result.shadeCode}
-                      style={{
-                        width: "100%",
-                        maxWidth: "260px",
-                        height: "auto",
-                        objectFit: "contain",
-                        marginBottom: "12px",
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "220px",
-                        height: "280px",
-                        maxWidth: "100%",
-                        margin: "0 auto 12px",
-                        borderRadius: "22px",
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px dashed rgba(255,255,255,0.14)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "rgba(255,255,255,0.5)",
-                        padding: "16px",
-                      }}
-                    >
-                      Product image will show here
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      color: "rgba(255,255,255,0.72)",
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    This result is now coming from your <code>/api/predict</code> route instead of local shade math in App.tsx.
-                  </div>
-                </div>
-              </div>
-            )}
+            <div style={styles.bottomActionRow}>
+              <button onClick={resetAll} style={styles.smallResetButton} type="button">
+                Reset
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {errorMsg ? <div style={styles.errorBox}>{errorMsg}</div> : null}
+
+        <div style={styles.footer}>© 2026 AltoV Beauty</div>
       </div>
     </div>
   );
 }
 
-const primaryButtonStyle: React.CSSProperties = {
-  appearance: "none",
-  border: "none",
-  borderRadius: "16px",
-  padding: "14px 18px",
-  background: "#ffffff",
-  color: "#111111",
-  fontWeight: 700,
-  fontSize: "15px",
-  cursor: "pointer",
-};
+function ShadeOptionCard({
+  card,
+  label,
+  isBest,
+}: {
+  card: ShadeCard | null;
+  label: string;
+  isBest: boolean;
+}) {
+  if (!card) {
+    return (
+      <div style={styles.optionCard}>
+        <div style={styles.placeholderImageBox} />
+        <div style={styles.placeholderShade}>N/A</div>
+        <div style={styles.placeholderLabel}>No shade</div>
+      </div>
+    );
+  }
 
-const secondaryButtonStyle: React.CSSProperties = {
-  appearance: "none",
-  border: "1px solid rgba(255,255,255,0.18)",
-  borderRadius: "16px",
-  padding: "14px 18px",
-  background: "rgba(255,255,255,0.08)",
-  color: "#ffffff",
-  fontWeight: 700,
-  fontSize: "15px",
-  cursor: "pointer",
-};
+  return (
+    <div style={isBest ? styles.bestCard : styles.optionCard}>
+      {isBest ? <div style={styles.bestBadge}>BEST MATCH</div> : <div style={styles.spacerBadge} />}
 
-const ghostButtonStyle: React.CSSProperties = {
-  appearance: "none",
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: "16px",
-  padding: "14px 18px",
-  background: "transparent",
-  color: "#ffffff",
-  fontWeight: 700,
-  fontSize: "15px",
-  cursor: "pointer",
+      <div style={styles.productImageBox}>
+        {card.productImage ? (
+          <img
+            src={card.productImage}
+            alt={card.shadeCode}
+            style={styles.productImage}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div style={styles.placeholderImageBox} />
+        )}
+      </div>
+
+      <div style={styles.shadeName}>{card.shadeCode}</div>
+      <div style={styles.shadeLabel}>{label}</div>
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    background: "#f4efea",
+    padding: "24px 16px 40px",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    color: "#2b1d15",
+  },
+  wrapper: {
+    maxWidth: "1100px",
+    margin: "0 auto",
+    background: "#efe9e4",
+    minHeight: "92vh",
+    padding: "10px 16px 28px",
+  },
+  brand: {
+    textAlign: "center",
+    fontSize: "15px",
+    letterSpacing: "0.45em",
+    color: "#b07a34",
+    fontWeight: 700,
+    marginTop: "8px",
+    marginBottom: "10px",
+  },
+  title: {
+    textAlign: "center",
+    fontSize: "20px",
+    fontWeight: 500,
+    marginBottom: "18px",
+  },
+  topButtons: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "14px",
+    flexWrap: "wrap",
+    marginBottom: "20px",
+  },
+  blackButton: {
+    border: "none",
+    background: "#000000",
+    color: "#ffffff",
+    borderRadius: "999px",
+    padding: "14px 22px",
+    fontSize: "15px",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  whiteButton: {
+    border: "1px solid #cdb99f",
+    background: "#f8f5f1",
+    color: "#7f6a52",
+    borderRadius: "999px",
+    padding: "14px 22px",
+    fontSize: "15px",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  helperText: {
+    textAlign: "center",
+    color: "#9a8571",
+    fontSize: "14px",
+    marginBottom: "24px",
+  },
+  previewSection: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "18px",
+  },
+  previewFrame: {
+    width: "100%",
+    maxWidth: "460px",
+    background: "#f6f1ec",
+    border: "1px solid #dccbb8",
+    borderRadius: "22px",
+    padding: "10px",
+  },
+  previewImage: {
+    width: "100%",
+    borderRadius: "16px",
+    display: "block",
+  },
+  actionRow: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+  bottomActionRow: {
+    display: "flex",
+    justifyContent: "center",
+    marginTop: "14px",
+  },
+  findShadeButton: {
+    border: "none",
+    background: "#ffffff",
+    color: "#1f1a17",
+    borderRadius: "14px",
+    padding: "16px 22px",
+    fontSize: "16px",
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+  },
+  smallResetButton: {
+    border: "1px solid #d8cabc",
+    background: "#f8f5f1",
+    color: "#7d6754",
+    borderRadius: "8px",
+    padding: "8px 14px",
+    fontSize: "12px",
+    cursor: "pointer",
+    fontWeight: 500,
+  },
+  resultShell: {
+    marginTop: "18px",
+  },
+  resultGrid: {
+    display: "grid",
+    gridTemplateColumns: "minmax(120px, 160px) repeat(3, minmax(150px, 190px))",
+    gap: "16px",
+    justifyContent: "center",
+    alignItems: "stretch",
+    overflowX: "auto",
+    paddingBottom: "8px",
+  },
+  faceColumn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  faceImageFrame: {
+    width: "100%",
+    maxWidth: "150px",
+    background: "#f9f5f1",
+    borderRadius: "18px",
+    padding: "4px",
+    boxShadow: "0 0 0 1px #ebddd0 inset",
+  },
+  faceImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    borderRadius: "14px",
+    display: "block",
+  },
+  optionCard: {
+    minHeight: "360px",
+    background: "#f4f1ee",
+    borderRadius: "18px",
+    padding: "14px 14px 18px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  bestCard: {
+    minHeight: "360px",
+    background: "#f7f3ef",
+    borderRadius: "18px",
+    padding: "14px 14px 18px",
+    border: "2px solid #cba15a",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
+  bestBadge: {
+    alignSelf: "flex-start",
+    background: "#c99240",
+    color: "#ffffff",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 700,
+    padding: "8px 14px",
+    marginBottom: "14px",
+    letterSpacing: "0.08em",
+  },
+  spacerBadge: {
+    height: "38px",
+    marginBottom: "14px",
+  },
+  productImageBox: {
+    width: "100%",
+    height: "180px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#ece9e6",
+    borderRadius: "8px",
+    overflow: "hidden",
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    display: "block",
+  },
+  placeholderImageBox: {
+    width: "100%",
+    height: "100%",
+    background: "#e6e1dc",
+  },
+  shadeName: {
+    marginTop: "16px",
+    fontSize: "22px",
+    fontWeight: 800,
+    color: "#5a3622",
+    textAlign: "center",
+  },
+  shadeLabel: {
+    marginTop: "8px",
+    fontSize: "12px",
+    letterSpacing: "0.18em",
+    color: "#c38d46",
+    textAlign: "center",
+    fontWeight: 700,
+  },
+  placeholderShade: {
+    marginTop: "16px",
+    fontSize: "20px",
+    fontWeight: 700,
+    color: "#8f7f72",
+    textAlign: "center",
+  },
+  placeholderLabel: {
+    marginTop: "8px",
+    fontSize: "12px",
+    letterSpacing: "0.12em",
+    color: "#b59f8f",
+    textAlign: "center",
+  },
+  errorBox: {
+    maxWidth: "560px",
+    margin: "18px auto 0",
+    background: "#fff1f0",
+    border: "1px solid #e6b7b3",
+    color: "#8a3732",
+    borderRadius: "12px",
+    padding: "12px 14px",
+    textAlign: "center",
+    fontSize: "14px",
+    lineHeight: 1.5,
+  },
+  footer: {
+    textAlign: "center",
+    fontSize: "12px",
+    color: "#5d4c40",
+    marginTop: "26px",
+  },
 };
 
 export default App;
