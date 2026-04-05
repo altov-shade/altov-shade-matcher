@@ -2,28 +2,23 @@ import React, { useEffect, useRef, useState } from "react";
 
 type ShadeCard = {
   shadeCode: string;
-  shadeName: string;
   productImage?: string;
-  undertone?: string;
 };
 
 type ApiResponse = {
   success: boolean;
-  match: ShadeCard;
-  range: {
+  match?: ShadeCard;
+  range?: {
     minusOne: ShadeCard | null;
-    selected: ShadeCard;
+    selected: ShadeCard | null;
     plusOne: ShadeCard | null;
   };
   debug?: {
-    shadeScore?: number;
-    medianLuma?: number;
-    medianR?: number;
-    medianG?: number;
-    medianB?: number;
+    luma?: number;
     warmth?: number;
-    sampleCount?: number;
+    score?: number;
   };
+  error?: string;
 };
 
 function App() {
@@ -36,7 +31,7 @@ function App() {
   const [cameraLoading, setCameraLoading] = useState(false);
 
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraFileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -55,11 +50,42 @@ function App() {
     }
   };
 
+  const resetAll = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setResult(null);
+    setErrorMsg("");
+    setLoading(false);
+    setCameraOpen(false);
+    stopCamera();
+
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+  };
+
+  const applyPickedFile = (file: File | null) => {
+    if (!file) return;
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setResult(null);
+    setErrorMsg("");
+  };
+
+  const handleUploadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    applyPickedFile(file);
+  };
+
   const openDesktopCamera = async () => {
     try {
-      setErrorMsg("");
       setCameraLoading(true);
       setCameraOpen(true);
+      setErrorMsg("");
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -75,27 +101,28 @@ function App() {
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
+          void videoRef.current.play();
         }
       }, 50);
-    } catch (error: any) {
+    } catch {
       setCameraOpen(false);
-      setErrorMsg("Camera access was blocked or unavailable. You can still use Upload Photo.");
+      setErrorMsg("Camera access was blocked or unavailable. Please upload a photo instead.");
     } finally {
       setCameraLoading(false);
     }
   };
 
   const handleTakePhotoClick = async () => {
-    const isMobileLike = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    const isMobile =
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
-    if (isMobileLike) {
-      cameraFileInputRef.current?.click();
+    if (isMobile) {
+      cameraInputRef.current?.click();
       return;
     }
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setErrorMsg("Your browser does not support webcam capture here. Please use Upload Photo.");
+      setErrorMsg("Your browser does not support webcam capture here. Please upload a photo instead.");
       return;
     }
 
@@ -110,7 +137,6 @@ function App() {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-
     const width = video.videoWidth || 1080;
     const height = video.videoHeight || 1080;
 
@@ -134,9 +160,11 @@ function App() {
       return;
     }
 
-    const file = new File([blob], "webcam-capture.jpg", { type: "image/jpeg" });
-    applyPickedFile(file);
+    const file = new File([blob], "webcam-capture.jpg", {
+      type: "image/jpeg"
+    });
 
+    applyPickedFile(file);
     setCameraOpen(false);
     stopCamera();
   };
@@ -144,24 +172,6 @@ function App() {
   const closeCamera = () => {
     setCameraOpen(false);
     stopCamera();
-  };
-
-  const applyPickedFile = (file: File | null) => {
-    if (!file) return;
-
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    setSelectedFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
-    setResult(null);
-    setErrorMsg("");
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    applyPickedFile(file);
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -183,7 +193,7 @@ function App() {
 
   const analyzeImage = async () => {
     if (!selectedFile) {
-      setErrorMsg("Please upload or take a clear face photo first.");
+      setErrorMsg("Upload a clear face photo to begin.");
       return;
     }
 
@@ -202,25 +212,21 @@ function App() {
         body: JSON.stringify({ imageBase64 })
       });
 
-      const responseText = await response.text();
+      const text = await response.text();
 
-      let data: ApiResponse | { error?: string; details?: string } | null = null;
+      let data: ApiResponse | null = null;
 
       try {
-        data = JSON.parse(responseText);
+        data = JSON.parse(text) as ApiResponse;
       } catch {
-        throw new Error(responseText || "The server returned an unexpected response.");
+        throw new Error(text || "The server returned an unexpected response.");
       }
 
       if (!response.ok) {
-        const message =
-          (data as any)?.details ||
-          (data as any)?.error ||
-          "Prediction failed.";
-        throw new Error(message);
+        throw new Error(data?.error || "Prediction failed.");
       }
 
-      setResult(data as ApiResponse);
+      setResult(data);
     } catch (error: any) {
       setErrorMsg(error?.message || "Something went wrong during analysis.");
     } finally {
@@ -228,22 +234,9 @@ function App() {
     }
   };
 
-  const resetAll = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setResult(null);
-    setLoading(false);
-    setErrorMsg("");
-    setCameraOpen(false);
-    stopCamera();
-
-    if (uploadInputRef.current) uploadInputRef.current.value = "";
-    if (cameraFileInputRef.current) cameraFileInputRef.current.value = "";
-  };
+  const minusOne = result?.range?.minusOne || null;
+  const selected = result?.range?.selected || result?.match || null;
+  const plusOne = result?.range?.plusOne || null;
 
   return (
     <div style={styles.page}>
@@ -252,11 +245,7 @@ function App() {
         <div style={styles.title}>AltoV Shade Match</div>
 
         <div style={styles.topButtons}>
-          <button
-            onClick={handleTakePhotoClick}
-            style={styles.blackButton}
-            type="button"
-          >
+          <button onClick={handleTakePhotoClick} style={styles.blackButton} type="button">
             Take Photo
           </button>
 
@@ -270,19 +259,19 @@ function App() {
         </div>
 
         <input
-          ref={cameraFileInputRef}
+          ref={cameraInputRef}
           type="file"
-          accept="image/*"
-          capture="user"
-          onChange={handleFileChange}
+          accept="image/png,image/jpeg,image/jpg"
+          capture="environment"
+          onChange={handleUploadChange}
           style={{ display: "none" }}
         />
 
         <input
           ref={uploadInputRef}
           type="file"
-          accept="image/*"
-          onChange={handleFileChange}
+          accept="image/png,image/jpeg,image/jpg"
+          onChange={handleUploadChange}
           style={{ display: "none" }}
         />
 
@@ -306,19 +295,11 @@ function App() {
               </div>
 
               <div style={styles.cameraButtonRow}>
-                <button
-                  onClick={captureFromWebcam}
-                  style={styles.captureButton}
-                  type="button"
-                >
+                <button onClick={captureFromWebcam} style={styles.captureButton} type="button">
                   Capture
                 </button>
 
-                <button
-                  onClick={closeCamera}
-                  style={styles.cancelButton}
-                  type="button"
-                >
+                <button onClick={closeCamera} style={styles.cancelButton} type="button">
                   Cancel
                 </button>
               </div>
@@ -330,7 +311,7 @@ function App() {
 
         {!previewUrl && !result && (
           <div style={styles.helperText}>
-            Upload or take a clear face photo to begin.
+            Upload a clear face photo to begin.
           </div>
         )}
 
@@ -357,7 +338,7 @@ function App() {
           </div>
         )}
 
-        {result && (
+        {result && selected && (
           <div style={styles.resultShell}>
             <div style={styles.resultGrid}>
               <div style={styles.faceColumn}>
@@ -368,13 +349,19 @@ function App() {
                 ) : null}
               </div>
 
-              <ShadeOptionCard card={result.range.minusOne} label="NEAR MATCH" isBest={false} />
-              <ShadeOptionCard
-                card={result.range.selected}
-                label="PRECISION IDENTIFIED"
-                isBest={true}
-              />
-              <ShadeOptionCard card={result.range.plusOne} label="NEAR MATCH" isBest={false} />
+              {minusOne ? (
+                <ShadeOptionCard card={minusOne} label="NEAR MATCH" isBest={false} />
+              ) : (
+                <div />
+              )}
+
+              <ShadeOptionCard card={selected} label="PRECISION IDENTIFIED" isBest={true} />
+
+              {plusOne ? (
+                <ShadeOptionCard card={plusOne} label="NEAR MATCH" isBest={false} />
+              ) : (
+                <div />
+              )}
             </div>
 
             <div style={styles.bottomActionRow}>
@@ -398,20 +385,10 @@ function ShadeOptionCard({
   label,
   isBest
 }: {
-  card: ShadeCard | null;
+  card: ShadeCard;
   label: string;
   isBest: boolean;
 }) {
-  if (!card) {
-    return (
-      <div style={styles.optionCard}>
-        <div style={styles.placeholderImageBox} />
-        <div style={styles.placeholderShade}>N/A</div>
-        <div style={styles.placeholderLabel}>No shade</div>
-      </div>
-    );
-  }
-
   return (
     <div style={isBest ? styles.bestCard : styles.optionCard}>
       {isBest ? <div style={styles.bestBadge}>BEST MATCH</div> : <div style={styles.spacerBadge} />}
@@ -655,20 +632,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#c38d46",
     textAlign: "center",
     fontWeight: 700
-  },
-  placeholderShade: {
-    marginTop: "16px",
-    fontSize: "20px",
-    fontWeight: 700,
-    color: "#8f7f72",
-    textAlign: "center"
-  },
-  placeholderLabel: {
-    marginTop: "8px",
-    fontSize: "12px",
-    letterSpacing: "0.12em",
-    color: "#b59f8f",
-    textAlign: "center"
   },
   errorBox: {
     maxWidth: "640px",
