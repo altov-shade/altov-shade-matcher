@@ -1,4 +1,4 @@
-const sharp = require("sharp");
+import sharp from "sharp";
 
 const SHADE_CATALOG = [
   { shadeCode: "HF5", shadeName: "HF5", brightness: 72, undertone: "neutral", productImage: "/images/HF5.png" },
@@ -11,7 +11,7 @@ const SHADE_CATALOG = [
   { shadeCode: "HF12", shadeName: "HF12", brightness: 114, undertone: "warm", productImage: "/images/HF12.png" },
   { shadeCode: "HF13", shadeName: "HF13", brightness: 120, undertone: "neutral", productImage: "/images/HF13.png" },
   { shadeCode: "HF14", shadeName: "HF14", brightness: 126, undertone: "neutral", productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", shadeName: "HF15", brightness: 132, undertone: "warm", productImage: "/images/HF15.png" },
+  { shadeCode: "HF15", shadeName: "HF15", brightness: 132, undertone: "warm", productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -46,8 +46,9 @@ export default async function handler(req, res) {
 
     const selected = SHADE_CATALOG[selectedIndex];
     const minusOne = selectedIndex > 0 ? SHADE_CATALOG[selectedIndex - 1] : null;
-    const plusOne =
-      selectedIndex < SHADE_CATALOG.length - 1 ? SHADE_CATALOG[selectedIndex + 1] : null;
+    const plusOne = selectedIndex < SHADE_CATALOG.length - 1
+      ? SHADE_CATALOG[selectedIndex + 1]
+      : null;
 
     return res.status(200).json({
       success: true,
@@ -55,21 +56,21 @@ export default async function handler(req, res) {
       range: {
         minusOne,
         selected,
-        plusOne,
+        plusOne
       },
       debug: {
         cheekBrightness: cheekStats.brightness,
         avgR: cheekStats.avgR,
         avgG: cheekStats.avgG,
         avgB: cheekStats.avgB,
-        sampleCount: cheekStats.sampleCount,
-      },
+        sampleCount: cheekStats.sampleCount
+      }
     });
   } catch (error) {
     console.error("Prediction error:", error);
     return res.status(500).json({
       error: "Prediction failed",
-      details: error.message || "Unknown server error",
+      details: error instanceof Error ? error.message : "Unknown server error"
     });
   }
 }
@@ -87,7 +88,7 @@ async function getLowerCheekJawStats(imageBuffer) {
       avgR: 114,
       avgG: 114,
       avgB: 114,
-      sampleCount: 0,
+      sampleCount: 0
     };
   }
 
@@ -103,14 +104,14 @@ async function getLowerCheekJawStats(imageBuffer) {
     xStart: Math.floor(width * 0.18),
     xEnd: Math.floor(width * 0.36),
     yStart: Math.floor(height * 0.60),
-    yEnd: Math.floor(height * 0.84),
+    yEnd: Math.floor(height * 0.84)
   };
 
   const rightRegion = {
     xStart: Math.floor(width * 0.64),
     xEnd: Math.floor(width * 0.82),
     yStart: Math.floor(height * 0.60),
-    yEnd: Math.floor(height * 0.84),
+    yEnd: Math.floor(height * 0.84)
   };
 
   const samples = [];
@@ -124,7 +125,7 @@ async function getLowerCheekJawStats(imageBuffer) {
       avgR: 114,
       avgG: 114,
       avgB: 114,
-      sampleCount: 0,
+      sampleCount: 0
     };
   }
 
@@ -149,7 +150,7 @@ async function getLowerCheekJawStats(imageBuffer) {
     avgR,
     avgG,
     avgB,
-    sampleCount: samples.length,
+    sampleCount: samples.length
   };
 }
 
