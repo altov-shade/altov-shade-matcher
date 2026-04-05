@@ -1,17 +1,17 @@
 const sharp = require("sharp");
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", shadeName: "HF5", brightness: 72, undertone: "neutral", productImage: "/products/HF5.png" },
-  { shadeCode: "HF6", shadeName: "HF6", brightness: 78, undertone: "warm", productImage: "/products/HF6.png" },
-  { shadeCode: "HF7", shadeName: "HF7", brightness: 84, undertone: "neutral", productImage: "/products/HF7.png" },
-  { shadeCode: "HF8", shadeName: "HF8", brightness: 90, undertone: "warm", productImage: "/products/HF8.png" },
-  { shadeCode: "HF9", shadeName: "HF9", brightness: 96, undertone: "neutral", productImage: "/products/HF9.png" },
-  { shadeCode: "HF10", shadeName: "HF10", brightness: 102, undertone: "warm", productImage: "/products/HF10.png" },
-  { shadeCode: "HF11", shadeName: "HF11", brightness: 108, undertone: "neutral", productImage: "/products/HF11.png" },
-  { shadeCode: "HF12", shadeName: "HF12", brightness: 114, undertone: "warm", productImage: "/products/HF12.png" },
-  { shadeCode: "HF13", shadeName: "HF13", brightness: 120, undertone: "neutral", productImage: "/products/HF13.png" },
-  { shadeCode: "HF14", shadeName: "HF14", brightness: 126, undertone: "neutral", productImage: "/products/HF14.png" },
-  { shadeCode: "HF15", shadeName: "HF15", brightness: 132, undertone: "warm", productImage: "/products/HF15.png" },
+  { shadeCode: "HF5", shadeName: "HF5", brightness: 72, undertone: "neutral", productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", shadeName: "HF6", brightness: 78, undertone: "warm", productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", shadeName: "HF7", brightness: 84, undertone: "neutral", productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", shadeName: "HF8", brightness: 90, undertone: "warm", productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", shadeName: "HF9", brightness: 96, undertone: "neutral", productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", shadeName: "HF10", brightness: 102, undertone: "warm", productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", shadeName: "HF11", brightness: 108, undertone: "neutral", productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", shadeName: "HF12", brightness: 114, undertone: "warm", productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", shadeName: "HF13", brightness: 120, undertone: "neutral", productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", shadeName: "HF14", brightness: 126, undertone: "neutral", productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", shadeName: "HF15", brightness: 132, undertone: "warm", productImage: "/images/HF15.png" },
 ];
 
 export default async function handler(req, res) {
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
 
     const cheekStats = await getLowerCheekJawStats(imageBuffer);
     const selectedIndex = findClosestShadeIndex(cheekStats.brightness, SHADE_CATALOG);
+
     const selected = SHADE_CATALOG[selectedIndex];
     const minusOne = selectedIndex > 0 ? SHADE_CATALOG[selectedIndex - 1] : null;
     const plusOne =
@@ -82,10 +83,10 @@ async function getLowerCheekJawStats(imageBuffer) {
 
   if (!width || !height) {
     return {
-      brightness: 110,
-      avgR: 110,
-      avgG: 110,
-      avgB: 110,
+      brightness: 114,
+      avgR: 114,
+      avgG: 114,
+      avgB: 114,
       sampleCount: 0,
     };
   }
@@ -101,15 +102,15 @@ async function getLowerCheekJawStats(imageBuffer) {
   const leftRegion = {
     xStart: Math.floor(width * 0.18),
     xEnd: Math.floor(width * 0.36),
-    yStart: Math.floor(height * 0.58),
-    yEnd: Math.floor(height * 0.82),
+    yStart: Math.floor(height * 0.60),
+    yEnd: Math.floor(height * 0.84),
   };
 
   const rightRegion = {
     xStart: Math.floor(width * 0.64),
     xEnd: Math.floor(width * 0.82),
-    yStart: Math.floor(height * 0.58),
-    yEnd: Math.floor(height * 0.82),
+    yStart: Math.floor(height * 0.60),
+    yEnd: Math.floor(height * 0.84),
   };
 
   const samples = [];
@@ -119,10 +120,10 @@ async function getLowerCheekJawStats(imageBuffer) {
 
   if (!samples.length) {
     return {
-      brightness: 110,
-      avgR: 110,
-      avgG: 110,
-      avgB: 110,
+      brightness: 114,
+      avgR: 114,
+      avgG: 114,
+      avgB: 114,
       sampleCount: 0,
     };
   }
