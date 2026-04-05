@@ -9,17 +9,17 @@ export const config = {
 };
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", score: 180, productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", score: 165, productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", score: 150, productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", score: 138, productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", score: 126, productImage: "/images/HF9.png" },
-  { shadeCode: "HF10", score: 114, productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", score: 102, productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", score: 90, productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", score: 78, productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", score: 66, productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", score: 50, productImage: "/images/HF15.png" }
+  { shadeCode: "HF5", score: 185, productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", score: 170, productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", score: 155, productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", score: 140, productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", score: 125, productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", score: 110, productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", score: 95, productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", score: 82, productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", score: 69, productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", score: 56, productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", score: 43, productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -51,12 +51,14 @@ export default async function handler(req, res) {
     const matches = rawImage.match(/^data:(image\/png|image\/jpeg|image\/jpg);base64,/i);
 
     if (!matches) {
-      return res.status(400).json({
-        error: "Only PNG and JPEG supported"
-      });
+      return res.status(400).json({ error: "Only PNG and JPEG supported" });
     }
 
     const base64 = rawImage.split(",")[1];
+    if (!base64) {
+      return res.status(400).json({ error: "Invalid image data" });
+    }
+
     const buffer = Buffer.from(base64, "base64");
 
     const stats = await getCheekStats(buffer);
@@ -90,7 +92,7 @@ export default async function handler(req, res) {
 async function getCheekStats(buffer) {
   const { data, info } = await sharp(buffer)
     .rotate()
-    .resize(400, 400)
+    .resize(400, 400, { fit: "inside", withoutEnlargement: true })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -102,11 +104,11 @@ async function getCheekStats(buffer) {
   const pixels = [];
 
   const regions = [
-    { x1: width * 0.2, x2: width * 0.35, y1: height * 0.55, y2: height * 0.75 },
-    { x1: width * 0.65, x2: width * 0.8, y1: height * 0.55, y2: height * 0.75 }
+    { x1: width * 0.20, x2: width * 0.35, y1: height * 0.54, y2: height * 0.76 },
+    { x1: width * 0.65, x2: width * 0.80, y1: height * 0.54, y2: height * 0.76 }
   ];
 
-  regions.forEach((region) => {
+  for (const region of regions) {
     for (let y = region.y1; y < region.y2; y += 2) {
       for (let x = region.x1; x < region.x2; x += 2) {
         const idx = (Math.floor(y) * width + Math.floor(x)) * channels;
@@ -119,44 +121,70 @@ async function getCheekStats(buffer) {
 
         const luma = 0.299 * r + 0.587 * g + 0.114 * b;
         const warmth = r - b;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const chroma = max - min;
 
-        if (luma < 50 || luma > 230) continue;
-        if (warmth < 5) continue;
+        if (luma < 45 || luma > 235) continue;
+        if (r > 245 && g > 245 && b > 245) continue;
+        if (chroma < 8 || chroma > 95) continue;
+        if (warmth < 4) continue;
 
         pixels.push({ luma, warmth });
       }
     }
-  });
-
-  if (!pixels.length) {
-    return { medianLuma: 120, warmth: 20 };
   }
 
-  pixels.sort((a, b) => a.luma - b.luma);
-  const mid = Math.floor(pixels.length / 2);
+  if (!pixels.length) {
+    return { medianLuma: 125, warmth: 18 };
+  }
+
+  const sortedLuma = pixels.map((p) => p.luma).sort((a, b) => a - b);
+  const sortedWarmth = pixels.map((p) => p.warmth).sort((a, b) => a - b);
 
   return {
-    medianLuma: pixels[mid].luma,
-    warmth: pixels[mid].warmth
+    medianLuma: median(sortedLuma),
+    warmth: median(sortedWarmth)
   };
+}
+
+function median(arr) {
+  const mid = Math.floor(arr.length / 2);
+  if (arr.length % 2 === 0) {
+    return (arr[mid - 1] + arr[mid]) / 2;
+  }
+  return arr[mid];
 }
 
 function buildShadeScore(stats) {
   const luma = stats.medianLuma;
+  const warmth = stats.warmth;
 
   let depth = 255 - luma;
-  depth *= 0.72;
 
-  if (luma > 185) depth -= 28;
-  if (luma > 210) depth -= 12;
+  // Base curve
+  depth *= 0.74;
 
-  if (luma >= 130 && luma <= 170) {
-    depth += 6;
+  // Light skin correction
+  if (luma > 190) depth -= 24;
+  else if (luma > 175) depth -= 16;
+  else if (luma > 160) depth -= 8;
+
+  // Deep skin correction
+  if (luma < 115) depth += 12;
+  else if (luma < 130) depth += 7;
+
+  // Very deep skin extra help
+  if (luma < 100) depth += 8;
+
+  // Mid band stabilization
+  if (luma >= 135 && luma <= 165) {
+    depth += 2;
   }
 
   const warmthAdjust = Math.max(
     -5,
-    Math.min(4, (stats.warmth - 18) * 0.08)
+    Math.min(5, (warmth - 18) * 0.08)
   );
 
   return depth + warmthAdjust;
