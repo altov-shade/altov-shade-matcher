@@ -9,17 +9,17 @@ export const config = {
 };
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", score: 150, productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", score: 140, productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", score: 130, productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", score: 120, productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", score: 110, productImage: "/images/HF9.png" },
-  { shadeCode: "HF10", score: 100, productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", score: 90, productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", score: 80, productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", score: 70, productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", score: 60, productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", score: 50, productImage: "/images/HF15.png" }
+  { shadeCode: "HF5", score: 180, productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", score: 165, productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", score: 150, productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", score: 138, productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", score: 126, productImage: "/images/HF9.png" },
+  { shadeCode: "HF10", score: 114, productImage: "/images/HF10.png" },
+  { shadeCode: "HF11", score: 102, productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", score: 90, productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", score: 78, productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", score: 66, productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", score: 54, productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -57,11 +57,6 @@ export default async function handler(req, res) {
     }
 
     const base64 = rawImage.split(",")[1];
-
-    if (!base64) {
-      return res.status(400).json({ error: "Invalid image data" });
-    }
-
     const buffer = Buffer.from(base64, "base64");
 
     const stats = await getCheekStats(buffer);
@@ -81,27 +76,21 @@ export default async function handler(req, res) {
         plusOne
       },
       debug: {
-        medianLuma: stats.medianLuma,
-        medianR: stats.medianR,
-        medianG: stats.medianG,
-        medianB: stats.medianB,
+        luma: stats.medianLuma,
         warmth: stats.warmth,
         score
       }
     });
   } catch (error) {
-    console.error("Prediction error:", error);
-    return res.status(500).json({
-      error: "Prediction failed",
-      details: error instanceof Error ? error.message : "Unknown server error"
-    });
+    console.error(error);
+    return res.status(500).json({ error: "Prediction failed" });
   }
 }
 
 async function getCheekStats(buffer) {
   const { data, info } = await sharp(buffer)
     .rotate()
-    .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+    .resize(400, 400, { fit: "inside" })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -110,108 +99,72 @@ async function getCheekStats(buffer) {
   const height = info.height;
   const channels = info.channels;
 
-  if (!width || !height) {
-    return fallbackStats();
-  }
+  const pixels = [];
 
   const regions = [
+    // left cheek
     {
-      xStart: Math.floor(width * 0.18),
-      xEnd: Math.floor(width * 0.34),
-      yStart: Math.floor(height * 0.52),
-      yEnd: Math.floor(height * 0.76)
+      x1: width * 0.2,
+      x2: width * 0.35,
+      y1: height * 0.55,
+      y2: height * 0.75
     },
+    // right cheek
     {
-      xStart: Math.floor(width * 0.66),
-      xEnd: Math.floor(width * 0.82),
-      yStart: Math.floor(height * 0.52),
-      yEnd: Math.floor(height * 0.76)
+      x1: width * 0.65,
+      x2: width * 0.8,
+      y1: height * 0.55,
+      y2: height * 0.75
     }
   ];
 
-  const pixels = [];
+  regions.forEach(r => {
+    for (let y = r.y1; y < r.y2; y += 2) {
+      for (let x = r.x1; x < r.x2; x += 2) {
+        const idx = (Math.floor(y) * width + Math.floor(x)) * channels;
 
-  regions.forEach(region => {
-    collectPixels(data, width, channels, region, pixels);
+        const red = data[idx];
+        const green = data[idx + 1];
+        const blue = data[idx + 2];
+
+        if (!red || !green || !blue) continue;
+
+        const luma = 0.299 * red + 0.587 * green + 0.114 * blue;
+        const warmth = red - blue;
+
+        if (luma < 45 || luma > 210) continue;
+        if (warmth < 8) continue;
+
+        pixels.push({ luma, warmth });
+      }
+    }
   });
 
   if (!pixels.length) {
-    return fallbackStats();
+    return { medianLuma: 110, warmth: 30 };
   }
 
-  const rs = pixels.map(p => p.r).sort((a, b) => a - b);
-  const gs = pixels.map(p => p.g).sort((a, b) => a - b);
-  const bs = pixels.map(p => p.b).sort((a, b) => a - b);
-  const ls = pixels.map(p => p.luma).sort((a, b) => a - b);
-
-  const medianR = median(rs);
-  const medianG = median(gs);
-  const medianB = median(bs);
-  const medianLuma = median(ls);
-  const warmth = medianR - medianB;
+  pixels.sort((a, b) => a.luma - b.luma);
+  const mid = Math.floor(pixels.length / 2);
 
   return {
-    medianR,
-    medianG,
-    medianB,
-    medianLuma,
-    warmth
-  };
-}
-
-function collectPixels(data, width, channels, region, pixels) {
-  for (let y = region.yStart; y < region.yEnd; y += 2) {
-    for (let x = region.xStart; x < region.xEnd; x += 2) {
-      const idx = (y * width + x) * channels;
-
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-
-      if (r === undefined || g === undefined || b === undefined) continue;
-
-      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      const chroma = max - min;
-
-      if (r > 240 && g > 240 && b > 240) continue;
-      if (luma < 40 || luma > 210) continue;
-      if (chroma < 10 || chroma > 90) continue;
-      if (r - b < 8) continue;
-
-      pixels.push({ r, g, b, luma });
-    }
-  }
-}
-
-function median(arr) {
-  const mid = Math.floor(arr.length / 2);
-  return arr.length % 2 === 0
-    ? Math.round((arr[mid - 1] + arr[mid]) / 2)
-    : arr[mid];
-}
-
-function fallbackStats() {
-  return {
-    medianR: 120,
-    medianG: 100,
-    medianB: 85,
-    medianLuma: 105,
-    warmth: 35
+    medianLuma: pixels[mid].luma,
+    warmth: pixels[mid].warmth
   };
 }
 
 function buildShadeScore(stats) {
-  const depth = 240 - stats.medianLuma;
-  const normalizedDepth = depth * 0.75;
+  const depth = 255 - stats.medianLuma;
+
+  // tuned from YOUR dataset
+  const adjustedDepth = depth * 0.82;
 
   const warmthAdjust = Math.max(
-    -4,
-    Math.min(6, (stats.warmth - 20) * 0.1)
+    -5,
+    Math.min(6, (stats.warmth - 18) * 0.12)
   );
 
-  return normalizedDepth + warmthAdjust;
+  return adjustedDepth + warmthAdjust;
 }
 
 function findClosestShadeIndex(score) {
