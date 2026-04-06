@@ -9,17 +9,17 @@ export const config = {
 };
 
 const SHADE_CATALOG = [
-  { shadeCode: "HF5", score: 185, productImage: "/images/HF5.png" },
-  { shadeCode: "HF6", score: 170, productImage: "/images/HF6.png" },
-  { shadeCode: "HF7", score: 155, productImage: "/images/HF7.png" },
-  { shadeCode: "HF8", score: 140, productImage: "/images/HF8.png" },
-  { shadeCode: "HF9", score: 125, productImage: "/images/HF9.png" },
+  { shadeCode: "HF5", score: 200, productImage: "/images/HF5.png" },
+  { shadeCode: "HF6", score: 182, productImage: "/images/HF6.png" },
+  { shadeCode: "HF7", score: 164, productImage: "/images/HF7.png" },
+  { shadeCode: "HF8", score: 146, productImage: "/images/HF8.png" },
+  { shadeCode: "HF9", score: 128, productImage: "/images/HF9.png" },
   { shadeCode: "HF10", score: 110, productImage: "/images/HF10.png" },
-  { shadeCode: "HF11", score: 95, productImage: "/images/HF11.png" },
-  { shadeCode: "HF12", score: 82, productImage: "/images/HF12.png" },
-  { shadeCode: "HF13", score: 69, productImage: "/images/HF13.png" },
-  { shadeCode: "HF14", score: 56, productImage: "/images/HF14.png" },
-  { shadeCode: "HF15", score: 43, productImage: "/images/HF15.png" }
+  { shadeCode: "HF11", score: 92, productImage: "/images/HF11.png" },
+  { shadeCode: "HF12", score: 76, productImage: "/images/HF12.png" },
+  { shadeCode: "HF13", score: 60, productImage: "/images/HF13.png" },
+  { shadeCode: "HF14", score: 44, productImage: "/images/HF14.png" },
+  { shadeCode: "HF15", score: 28, productImage: "/images/HF15.png" }
 ];
 
 export default async function handler(req, res) {
@@ -78,8 +78,9 @@ export default async function handler(req, res) {
         plusOne
       },
       debug: {
-        luma: stats.medianLuma,
-        warmth: stats.warmth,
+        medianLuma: stats.medianLuma,
+        medianWarmth: stats.medianWarmth,
+        medianChroma: stats.medianChroma,
         score
       }
     });
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
 async function getCheekStats(buffer) {
   const { data, info } = await sharp(buffer)
     .rotate()
-    .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+    .resize(420, 420, { fit: "inside", withoutEnlargement: true })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -101,17 +102,36 @@ async function getCheekStats(buffer) {
   const height = info.height;
   const channels = info.channels;
 
-  const pixels = [];
+  if (!width || !height) {
+    return {
+      medianLuma: 125,
+      medianWarmth: 20,
+      medianChroma: 25
+    };
+  }
 
+  // Narrower, lower cheek windows to avoid forehead, hair, lips, and background spill
   const regions = [
-    { x1: width * 0.20, x2: width * 0.35, y1: height * 0.54, y2: height * 0.76 },
-    { x1: width * 0.65, x2: width * 0.80, y1: height * 0.54, y2: height * 0.76 }
+    {
+      x1: Math.floor(width * 0.24),
+      x2: Math.floor(width * 0.36),
+      y1: Math.floor(height * 0.52),
+      y2: Math.floor(height * 0.68)
+    },
+    {
+      x1: Math.floor(width * 0.64),
+      x2: Math.floor(width * 0.76),
+      y1: Math.floor(height * 0.52),
+      y2: Math.floor(height * 0.68)
+    }
   ];
+
+  const samples = [];
 
   for (const region of regions) {
     for (let y = region.y1; y < region.y2; y += 2) {
       for (let x = region.x1; x < region.x2; x += 2) {
-        const idx = (Math.floor(y) * width + Math.floor(x)) * channels;
+        const idx = (y * width + x) * channels;
 
         const r = data[idx];
         const g = data[idx + 1];
@@ -125,26 +145,39 @@ async function getCheekStats(buffer) {
         const min = Math.min(r, g, b);
         const chroma = max - min;
 
-        if (luma < 45 || luma > 235) continue;
+        // Reject extreme highlights/background
         if (r > 245 && g > 245 && b > 245) continue;
-        if (chroma < 8 || chroma > 95) continue;
-        if (warmth < 4) continue;
+        if (luma < 35 || luma > 235) continue;
 
-        pixels.push({ luma, warmth });
+        // Reject gray/background pixels and very saturated odd pixels
+        if (chroma < 8 || chroma > 95) continue;
+
+        // Basic skin-likeliness
+        if (r < g || g < b - 18) continue;
+        if (warmth < 2) continue;
+
+        samples.push({ luma, warmth, chroma });
       }
     }
   }
 
-  if (!pixels.length) {
-    return { medianLuma: 125, warmth: 18 };
+  if (!samples.length) {
+    return {
+      medianLuma: 125,
+      medianWarmth: 20,
+      medianChroma: 25
+    };
   }
 
-  const sortedLuma = pixels.map((p) => p.luma).sort((a, b) => a - b);
-  const sortedWarmth = pixels.map((p) => p.warmth).sort((a, b) => a - b);
+  const sortedLuma = samples.map((p) => p.luma).sort((a, b) => a - b);
+  const sortedWarmth = samples.map((p) => p.warmth).sort((a, b) => a - b);
+  const sortedChroma = samples.map((p) => p.chroma).sort((a, b) => a - b);
 
+  // Use trimmed medians to reduce weird edge pixels
   return {
     medianLuma: median(sortedLuma),
-    warmth: median(sortedWarmth)
+    medianWarmth: median(sortedWarmth),
+    medianChroma: median(sortedChroma)
   };
 }
 
@@ -158,36 +191,33 @@ function median(arr) {
 
 function buildShadeScore(stats) {
   const luma = stats.medianLuma;
-  const warmth = stats.warmth;
+  const warmth = stats.medianWarmth;
+  const chroma = stats.medianChroma;
 
-  let depth = 255 - luma;
+  // Base depth
+  let score = (255 - luma) * 1.0;
 
-  // Base curve
-  depth *= 0.74;
+  // Stretch very light end lighter
+  if (luma > 205) score -= 55;
+  else if (luma > 190) score -= 40;
+  else if (luma > 175) score -= 26;
+  else if (luma > 160) score -= 12;
 
-  // Light skin correction
-  if (luma > 190) depth -= 24;
-  else if (luma > 175) depth -= 16;
-  else if (luma > 160) depth -= 8;
+  // Stretch very deep end deeper
+  if (luma < 85) score += 48;
+  else if (luma < 100) score += 34;
+  else if (luma < 115) score += 22;
+  else if (luma < 130) score += 10;
 
-  // Deep skin correction
-  if (luma < 115) depth += 12;
-  else if (luma < 130) depth += 7;
+  // Warmth is subtle, not dominant
+  if (warmth > 55) score += 4;
+  else if (warmth < 12) score -= 4;
 
-  // Very deep skin extra help
-  if (luma < 100) depth += 8;
+  // Mild support for natural skin richness
+  if (chroma > 45) score += 3;
+  else if (chroma < 16) score -= 3;
 
-  // Mid band stabilization
-  if (luma >= 135 && luma <= 165) {
-    depth += 2;
-  }
-
-  const warmthAdjust = Math.max(
-    -5,
-    Math.min(5, (warmth - 18) * 0.08)
-  );
-
-  return depth + warmthAdjust;
+  return score;
 }
 
 function findClosestShadeIndex(score) {
