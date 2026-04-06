@@ -251,8 +251,13 @@ function buildShadeScore(stats) {
     score -= 5;
   }
 
+  // very fair neutral skin boost
+  if (stats.normalizedLuma > 165 && stats.medianWarmth < 22) {
+    score -= 18;
+  }
+
   // medium band tuning
-  if (score >= 70 && score <= 150) {
+  if (score >= 95 && score <= 150) {
     score += 14;
   }
 
@@ -266,12 +271,17 @@ function buildShadeScore(stats) {
   }
 
   const warmth = stats.medianWarmth;
-  if (warmth > 58) score += 2;
+  if (warmth > 58) score += 1;
   else if (warmth < 8) score -= 3;
 
   // fair warm skin should not collapse too dark
   if (warmth > 32 && stats.normalizedLuma > 145) {
     score -= 6;
+  }
+
+  // warm tan protection
+  if (stats.normalizedLuma > 120 && stats.normalizedLuma < 165 && stats.medianWarmth > 26) {
+    score -= 10;
   }
 
   const chroma = stats.medianChroma;
