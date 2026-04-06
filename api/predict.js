@@ -194,28 +194,35 @@ function buildShadeScore(stats) {
   const warmth = stats.medianWarmth;
   const chroma = stats.medianChroma;
 
-  // Base depth
-  let score = (255 - luma) * 1.0;
+  let score = (255 - luma);
 
-  // Stretch very light end lighter
+  // LIGHT SKIN (stay strong)
   if (luma > 205) score -= 55;
   else if (luma > 190) score -= 40;
   else if (luma > 175) score -= 26;
   else if (luma > 160) score -= 12;
 
-  // Stretch very deep end deeper
+  // VERY DEEP SKIN (stay strong)
   if (luma < 85) score += 48;
   else if (luma < 100) score += 34;
-  else if (luma < 115) score += 22;
-  else if (luma < 130) score += 10;
 
-  // Warmth is subtle, not dominant
-  if (warmth > 55) score += 4;
-  else if (warmth < 12) score -= 4;
+  // 🔥 FIX: MEDIUM–DEEP BAND (this is her range)
+  if (luma >= 100 && luma <= 135) {
+    score -= 14;   // pull lighter so it doesn't drop to HF5
+  }
 
-  // Mild support for natural skin richness
-  if (chroma > 45) score += 3;
-  else if (chroma < 16) score -= 3;
+  // SOFT SUPPORT just above that band
+  if (luma > 135 && luma < 155) {
+    score -= 6;
+  }
+
+  // Warmth influence (keep subtle)
+  if (warmth > 55) score += 3;
+  else if (warmth < 12) score -= 3;
+
+  // Chroma stability
+  if (chroma > 45) score += 2;
+  else if (chroma < 16) score -= 2;
 
   return score;
 }
