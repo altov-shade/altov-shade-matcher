@@ -1,3 +1,416 @@
+import React, { useEffect, useRef, useState } from "react";
+
+type ShadeCard = {
+  shadeCode: string;
+  productImage?: string;
+};
+
+type ApiResponse = {
+  success: boolean;
+  match?: ShadeCard;
+  range?: {
+    minusOne: ShadeCard | null;
+    selected: ShadeCard | null;
+    plusOne: ShadeCard | null;
+  };
+  debug?: {
+    luma?: number;
+    warmth?: number;
+    score?: number;
+  };
+  error?: string;
+};
+
+function App() {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [result, setResult] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const resetAll = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setResult(null);
+    setErrorMsg("");
+    setLoading(false);
+    setCameraOpen(false);
+    stopCamera();
+
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+  };
+
+  const applyPickedFile = (file: File | null) => {
+    if (!file) return;
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    setResult(null);
+    setErrorMsg("");
+  };
+
+  const handleUploadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    applyPickedFile(file);
+  };
+
+  const openDesktopCamera = async () => {
+    try {
+      setCameraLoading(true);
+      setCameraOpen(true);
+      setErrorMsg("");
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 1280 }
+        },
+        audio: false
+      });
+
+      streamRef.current = stream;
+
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          void videoRef.current.play();
+        }
+      }, 50);
+    } catch {
+      setCameraOpen(false);
+      setErrorMsg("Camera access was blocked or unavailable. Please upload a photo instead.");
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const handleTakePhotoClick = async () => {
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setErrorMsg("Your browser does not support webcam capture here. Please upload a photo instead.");
+      return;
+    }
+
+    await openDesktopCamera();
+  };
+
+  const captureFromWebcam = async () => {
+    if (!videoRef.current || !canvasRef.current) {
+      setErrorMsg("Camera was not ready.");
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const width = video.videoWidth || 1080;
+    const height = video.videoHeight || 1080;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setErrorMsg("Could not capture image.");
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.95);
+    });
+
+    if (!blob) {
+      setErrorMsg("Could not capture image.");
+      return;
+    }
+
+    const file = new File([blob], "webcam-capture.jpg", {
+      type: "image/jpeg"
+    });
+
+    applyPickedFile(file);
+    setCameraOpen(false);
+    stopCamera();
+  };
+
+  const closeCamera = () => {
+    setCameraOpen(false);
+    stopCamera();
+  };
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Failed to read image."));
+        }
+      };
+
+      reader.onerror = () => reject(new Error("Failed to read image."));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const analyzeImage = async () => {
+    if (!selectedFile) {
+      setErrorMsg("Upload a clear face photo to begin.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrorMsg("");
+      setResult(null);
+
+      const imageBase64 = await fileToBase64(selectedFile);
+
+      const response = await fetch("/api/predict", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ imageBase64 })
+      });
+
+      const text = await response.text();
+
+      let data: ApiResponse | null = null;
+
+      try {
+        data = JSON.parse(text) as ApiResponse;
+      } catch {
+        throw new Error(text || "The server returned an unexpected response.");
+      }
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Prediction failed.");
+      }
+
+      setResult(data);
+    } catch (error: any) {
+      setErrorMsg(error?.message || "Something went wrong during analysis.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const minusOne = result?.range?.minusOne || null;
+  const selected = result?.range?.selected || result?.match || null;
+  const plusOne = result?.range?.plusOne || null;
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.wrapper}>
+        <div style={styles.brand}>ALTOV BEAUTY</div>
+        <div style={styles.title}>AltoV Shade Match</div>
+
+        <div style={styles.topButtons}>
+          <button onClick={handleTakePhotoClick} style={styles.blackButton} type="button">
+            Take Photo
+          </button>
+
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            style={styles.whiteButton}
+            type="button"
+          >
+            Upload Photo
+          </button>
+        </div>
+
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          capture="environment"
+          onChange={handleUploadChange}
+          style={{ display: "none" }}
+        />
+
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg"
+          onChange={handleUploadChange}
+          style={{ display: "none" }}
+        />
+
+        {cameraOpen && (
+          <div style={styles.cameraOverlay}>
+            <div style={styles.cameraModal}>
+              <div style={styles.cameraTitle}>Take Photo</div>
+
+              <div style={styles.cameraFrame}>
+                {cameraLoading ? (
+                  <div style={styles.cameraLoading}>Opening camera...</div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    style={styles.cameraVideo}
+                  />
+                )}
+              </div>
+
+              <div style={styles.cameraButtonRow}>
+                <button onClick={captureFromWebcam} style={styles.captureButton} type="button">
+                  Capture
+                </button>
+
+                <button onClick={closeCamera} style={styles.cancelButton} type="button">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <canvas ref={canvasRef} style={{ display: "none" }} />
+
+        {!previewUrl && !result && (
+          <div style={styles.helperText}>Upload a clear face photo to begin.</div>
+        )}
+
+        {previewUrl && !result && (
+          <div style={styles.previewSection}>
+            <div style={styles.previewFrame}>
+              <img src={previewUrl} alt="Preview" style={styles.previewImage} />
+            </div>
+
+            <div style={styles.actionRow}>
+              <button
+                onClick={analyzeImage}
+                style={styles.findShadeButton}
+                type="button"
+                disabled={loading}
+              >
+                {loading ? "Matching..." : "Find My Shade"}
+              </button>
+
+              <button onClick={resetAll} style={styles.smallResetButton} type="button">
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
+        {result && selected && (
+          <div style={styles.resultShell}>
+            <div style={styles.resultGrid}>
+              <div style={styles.faceColumn}>
+                {previewUrl ? (
+                  <div style={styles.faceImageFrame}>
+                    <img src={previewUrl} alt="Selected face" style={styles.faceImage} />
+                  </div>
+                ) : null}
+              </div>
+
+              {minusOne ? (
+                <ShadeOptionCard card={minusOne} label="CLOSE MATCH" isBest={false} />
+              ) : (
+                <div />
+              )}
+
+              <ShadeOptionCard card={selected} label="BEST MATCH" isBest={true} />
+
+              {plusOne ? (
+                <ShadeOptionCard card={plusOne} label="ALSO CONSIDER" isBest={false} />
+              ) : (
+                <div />
+              )}
+            </div>
+
+            <div style={styles.bottomActionRow}>
+              <button onClick={resetAll} style={styles.smallResetButton} type="button">
+                Reset
+              </button>
+            </div>
+          </div>
+        )}
+
+        {errorMsg ? <div style={styles.errorBox}>{errorMsg}</div> : null}
+
+        <div style={styles.footer}>© 2026 AltoV Beauty</div>
+      </div>
+    </div>
+  );
+}
+
+function ShadeOptionCard({
+  card,
+  label,
+  isBest
+}: {
+  card: ShadeCard;
+  label: string;
+  isBest: boolean;
+}) {
+  return (
+    <div style={isBest ? styles.bestCard : styles.optionCard}>
+      {isBest ? <div style={styles.bestBadge}>BEST MATCH</div> : <div style={styles.spacerBadge} />}
+
+      <div style={styles.productImageBox}>
+        {card.productImage ? (
+          <img
+            src={card.productImage}
+            alt={card.shadeCode}
+            style={styles.productImage}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div style={styles.placeholderImageBox} />
+        )}
+      </div>
+
+      <div style={styles.shadeName}>{card.shadeCode}</div>
+      <div style={styles.shadeLabel}>{label}</div>
+    </div>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
@@ -166,8 +579,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "flex-start"
   },
-
-  // ✅ FIXED: CENTERED BADGE
   bestBadge: {
     alignSelf: "center",
     background: "#c99240",
@@ -180,7 +591,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.08em",
     textAlign: "center"
   },
-
   spacerBadge: {
     height: "38px",
     marginBottom: "14px"
@@ -311,3 +721,5 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer"
   }
 };
+
+export default App;
