@@ -78,9 +78,12 @@ export default async function handler(req, res) {
         plusOne
       },
       debug: {
+        sampleCount: stats.sampleCount,
         medianLuma: round2(stats.medianLuma),
+        brightLuma: round2(stats.brightLuma),
         medianWarmth: round2(stats.medianWarmth),
         medianChroma: round2(stats.medianChroma),
+        foreheadMedian: round2(stats.foreheadMedian),
         normalizedLuma: round2(stats.normalizedLuma),
         score: round2(score)
       }
@@ -108,24 +111,24 @@ async function getFaceStats(buffer) {
   }
 
   const foreheadRegion = {
-    x1: Math.floor(width * 0.36),
-    x2: Math.floor(width * 0.64),
-    y1: Math.floor(height * 0.11),
-    y2: Math.floor(height * 0.27)
+    x1: Math.floor(width * 0.40),
+    x2: Math.floor(width * 0.60),
+    y1: Math.floor(height * 0.12),
+    y2: Math.floor(height * 0.25)
   };
 
   const cheekRegions = [
     {
-      x1: Math.floor(width * 0.22),
-      x2: Math.floor(width * 0.36),
-      y1: Math.floor(height * 0.50),
-      y2: Math.floor(height * 0.68)
+      x1: Math.floor(width * 0.30),
+      x2: Math.floor(width * 0.42),
+      y1: Math.floor(height * 0.42),
+      y2: Math.floor(height * 0.58)
     },
     {
-      x1: Math.floor(width * 0.64),
-      x2: Math.floor(width * 0.78),
-      y1: Math.floor(height * 0.50),
-      y2: Math.floor(height * 0.68)
+      x1: Math.floor(width * 0.58),
+      x2: Math.floor(width * 0.70),
+      y1: Math.floor(height * 0.42),
+      y2: Math.floor(height * 0.58)
     }
   ];
 
@@ -142,7 +145,7 @@ async function getFaceStats(buffer) {
       if (r === undefined || g === undefined || b === undefined) continue;
 
       const sample = buildSample(r, g, b);
-      if (isSkinLike(sample)) {
+      if (isSkinLike(sample, "forehead")) {
         foreheadLumas.push(sample.luma);
       }
     }
@@ -159,7 +162,7 @@ async function getFaceStats(buffer) {
         if (r === undefined || g === undefined || b === undefined) continue;
 
         const sample = buildSample(r, g, b);
-        if (isSkinLike(sample)) {
+        if (isSkinLike(sample, "cheek")) {
           cheekSamples.push(sample);
         }
       }
@@ -170,35 +173,45 @@ async function getFaceStats(buffer) {
     return fallbackStats();
   }
 
-  const sortedLuma = cheekSamples.map((p) => p.luma).sort((a, b) => a - b);
-  const sortedWarmth = cheekSamples.map((p) => p.warmth).sort((a, b) => a - b);
-  const sortedChroma = cheekSamples.map((p) => p.chroma).sort((a, b) => a - b);
+  const lumas = cheekSamples.map((p) => p.luma).sort((a, b) => a - b);
+  const warmths = cheekSamples.map((p) => p.warmth).sort((a, b) => a - b);
+  const chromas = cheekSamples.map((p) => p.chroma).sort((a, b) => a - b);
 
-  const medianLuma = median(sortedLuma);
-  const medianWarmth = median(sortedWarmth);
-  const medianChroma = median(sortedChroma);
+  const medianLuma = median(lumas);
+  const brightLuma = percentile(lumas, 0.68);
+  const medianWarmth = median(warmths);
+  const medianChroma = median(chromas);
+  const foreheadMedian = foreheadLumas.length
+    ? median(foreheadLumas.sort((a, b) => a - b))
+    : medianLuma;
 
-  let normalizedLuma = medianLuma;
+  let normalizedLuma = medianLuma * 0.35 + brightLuma * 0.65;
 
-  if (foreheadLumas.length > 8) {
-    const foreheadMedian = median(foreheadLumas.sort((a, b) => a - b));
-    const ratio = foreheadMedian / Math.max(medianLuma, 1);
+  const foreheadDelta = foreheadMedian - medianLuma;
 
-    if (ratio > 1.12) {
-      const correction = Math.min((ratio - 1.12) * 38, 18);
-      normalizedLuma = medianLuma - correction;
-    } else if (ratio < 0.92) {
-      const correction = Math.min((0.92 - ratio) * 26, 10);
-      normalizedLuma = medianLuma + correction;
-    }
+  if (foreheadDelta > 10) {
+    normalizedLuma += Math.min(foreheadDelta * 0.45, 12);
+  } else if (foreheadDelta < -10) {
+    normalizedLuma -= Math.min(Math.abs(foreheadDelta) * 0.25, 6);
   }
 
-  normalizedLuma = Math.max(35, Math.min(235, normalizedLuma));
+  if (medianChroma < 16) {
+    normalizedLuma += 4;
+  }
+
+  if (medianWarmth < 8) {
+    normalizedLuma += 3;
+  }
+
+  normalizedLuma = Math.max(32, Math.min(235, normalizedLuma));
 
   return {
+    sampleCount: cheekSamples.length,
     medianLuma,
+    brightLuma,
     medianWarmth,
     medianChroma,
+    foreheadMedian,
     normalizedLuma
   };
 }
@@ -211,66 +224,99 @@ function buildSample(r, g, b) {
   return { r, g, b, luma, warmth, chroma };
 }
 
-function isSkinLike(sample) {
+function isSkinLike(sample, region = "cheek") {
   const { r, g, b, luma, warmth, chroma } = sample;
 
   if (r > 245 && g > 245 && b > 245) return false;
-  if (luma < 30 || luma > 240) return false;
-  if (chroma < 6 || chroma > 100) return false;
+  if (luma < 28 || luma > 242) return false;
+  if (chroma < 8 || chroma > 92) return false;
 
-  if (r + 4 < g) return false;
-  if (g + 12 < b) return false;
-  if (warmth < -6) return false;
+  if (r + 2 < g) return false;
+  if (g + 16 < b) return false;
+  if (warmth < -8) return false;
+
+  if (region === "cheek") {
+    if (r < 45 && g < 35 && b < 30) return false;
+  }
 
   return true;
 }
 
 function fallbackStats() {
   return {
+    sampleCount: 0,
     medianLuma: 125,
+    brightLuma: 132,
     medianWarmth: 20,
     medianChroma: 25,
-    normalizedLuma: 125
+    foreheadMedian: 125,
+    normalizedLuma: 128
   };
 }
 
 function median(arr) {
+  if (!arr.length) return 0;
   const mid = Math.floor(arr.length / 2);
   return arr.length % 2 === 0
     ? (arr[mid - 1] + arr[mid]) / 2
     : arr[mid];
 }
 
+function percentile(arr, p) {
+  if (!arr.length) return 0;
+  const index = Math.max(0, Math.min(arr.length - 1, Math.floor((arr.length - 1) * p)));
+  return arr[index];
+}
+
 function buildShadeScore(stats) {
-  const lumaMin = 40;
-  const lumaMax = 220;
+  const lumaMin = 38;
+  const lumaMax = 222;
 
   const luma = Math.max(lumaMin, Math.min(lumaMax, stats.normalizedLuma));
-
   let score = ((lumaMax - luma) / (lumaMax - lumaMin)) * 200;
 
-  // Protect lighter skin so it does not get pushed too dark
-  if (score < 120) {
-    score -= (120 - score) * 0.25;
+  // Aggressive lift for very light skin
+  if (score < 85) {
+    score -= (85 - score) * 0.55;
   }
 
-  // Lift medium-light band closer to HF10-HF13
-  if (score >= 60 && score <= 120) {
-    score -= 10;
+  // Additional boost for extremely light tones
+  if (score < 55) {
+    score -= 6;
   }
 
-  // Keep deep tones stable without over-pushing everything darker
-  if (score > 150) {
-    score = 150 + (score - 150) * 0.65;
+  // Pull the medium range a little lighter
+  if (score >= 70 && score <= 125) {
+    score -= 12;
+  }
+
+  // Keep HF6 neighborhood stable
+  if (score >= 150 && score <= 188) {
+    score = 150 + (score - 150) * 0.95;
+  }
+
+  // Push only the truly deep end darker so HF5 can show up
+  if (score > 188) {
+    score = 188 + (score - 188) * 1.28;
   }
 
   const warmth = stats.medianWarmth;
-  if (warmth > 55) score += 2;
-  else if (warmth < 10) score -= 2;
+  if (warmth > 58) score += 2;
+  else if (warmth < 8) score -= 3;
+
+  // Neutral/cool light skin boost
+  if (warmth < 18 && stats.normalizedLuma > 135) {
+    score -= 3;
+  }
 
   const chroma = stats.medianChroma;
-  if (chroma > 50) score += 2;
-  else if (chroma < 12) score -= 2;
+  if (chroma > 52) score += 2;
+  else if (chroma < 14) score -= 2;
+
+  // Lift pale / low saturation skin
+  if (chroma < 18 && stats.normalizedLuma > 140) {
+    score -= 5;
+  }
 
   return Math.max(0, Math.min(200, score));
 }
