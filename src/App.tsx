@@ -350,15 +350,15 @@ function App() {
               </div>
 
               {minusOne ? (
-                <ShadeOptionCard card={minusOne} label="NEAR MATCH" isBest={false} />
+                <ShadeOptionCard card={minusOne} label="CLOSE MATCH" isBest={false} />
               ) : (
                 <div />
               )}
 
-              <ShadeOptionCard card={selected} label="PRECISION IDENTIFIED" isBest={true} />
+              <ShadeOptionCard card={selected} label="BEST MATCH" isBest={true} />
 
               {plusOne ? (
-                <ShadeOptionCard card={plusOne} label="NEAR MATCH" isBest={false} />
+                <ShadeOptionCard card={plusOne} label="ALSO CONSIDER" isBest={false} />
               ) : (
                 <div />
               )}
